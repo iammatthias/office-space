@@ -1,6 +1,7 @@
 {
   "name": "@office-space/app",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
