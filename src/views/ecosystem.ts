@@ -1,6 +1,12 @@
 import { EnvironmentalData } from "../types/environmental-data";
 
 export const renderEcosystem = (data: EnvironmentalData): string => {
+  // Guard against undefined data
+  if (!data?.weather) {
+    console.error("Missing or invalid data:", data);
+    return "<div>Loading environmental data...</div>";
+  }
+
   return `
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
