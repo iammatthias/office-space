@@ -11,8 +11,7 @@
     "better-sqlite3": "^11.6.0",
     "chart.js": "^4.4.7",
     "hono": "^3.12.12",
-    "marked": "^12.0.2",
-    "node-fetch": "^3.3.2"
+    "marked": "^12.0.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
