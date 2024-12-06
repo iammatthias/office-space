@@ -1,116 +1,120 @@
-import Chart from "chart.js/auto"; // Ensure Chart.js is installed
 import { EnvironmentalData } from "../types/environmental-data";
 
-// Render Ecosystem Function
-export const renderEcosystem = (data: EnvironmentalData): void => {
-  const app = document.getElementById("app");
-  if (!app) {
-    console.error("App element not found!");
-    return;
-  }
+export const renderEcosystem = (data: EnvironmentalData): string => {
+  return `
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  // Clear previous content if any
-  app.innerHTML = `
     <div id="ecosystem">
-      <!-- Unit Toggle -->
-      <div style="margin-bottom: 1rem;">
-        <label for="unitToggle">
-          <strong>View in:</strong>
-          <select id="unitToggle">
-            <option value="celsius" selected>Celsius (°C)</option>
-            <option value="fahrenheit">Fahrenheit (°F)</option>
-          </select>
-        </label>
-      </div>
+        <div style="margin-bottom: 1rem;">
+            <label>
+                <strong>View in:</strong>
+                <select id="unitToggle">
+                    <option value="celsius" selected>Celsius (°C)</option>
+                    <option value="fahrenheit">Fahrenheit (°F)</option>
+                </select>
+            </label>
+        </div>
 
-      <!-- Current State Cards -->
-      <div class="grid">
-        <div class="card">
-          <div class="card-title">🌡️ Temperature</div>
-          <div class="card-content">
-            <span id="currentTemp">${data.weather.temperature.toFixed(1)}°C</span><br />
-            <small>Feels like <span id="currentFeelsLike">${data.weather.feelsLike.toFixed(1)}°C</span></small>
-          </div>
+        <div class="grid">
+            <div class="card">
+                <div class="card-title">
+                    <span>🌡️</span>
+                    <span>Temperature</span>
+                </div>
+                <div class="card-content">
+                    <span id="currentTemp">${data.weather.temperature.toFixed(1)}°C</span><br />
+                    <small>Feels like <span id="currentFeelsLike">${data.weather.feelsLike.toFixed(1)}°C</span></small>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-title">
+                    <span>💧</span>
+                    <span>Humidity</span>
+                </div>
+                <div class="card-content">${data.weather.humidity}%</div>
+            </div>
+            <div class="card">
+                <div class="card-title">
+                    <span>🌫️</span>
+                    <span>Pressure</span>
+                </div>
+                <div class="card-content">${data.weather.pressure} hPa</div>
+            </div>
         </div>
-        <div class="card">
-          <div class="card-title">💧 Humidity</div>
-          <div class="card-content">${data.weather.humidity}%</div>
-        </div>
-        <div class="card">
-          <div class="card-title">🌫️ Pressure</div>
-          <div class="card-content">${data.weather.pressure} hPa</div>
-        </div>
-      </div>
 
-      <!-- Historical Trends Chart -->
-      <div>
         <h2>Historical Trends</h2>
         <canvas id="trendsChart"></canvas>
-      </div>
     </div>
-  `;
 
-  setupChartAndInteractivity(data);
-};
+    <script>
+        const data = ${JSON.stringify(data)};
+        let isCelsius = true;
 
-// Function to set up Chart.js and interactivity
-const setupChartAndInteractivity = (data: EnvironmentalData): void => {
-  const unitToggle = document.getElementById("unitToggle") as HTMLSelectElement;
-  const currentTemp = document.getElementById("currentTemp")!;
-  const currentFeelsLike = document.getElementById("currentFeelsLike")!;
-  const trendsCtx = (document.getElementById("trendsChart") as HTMLCanvasElement).getContext("2d")!;
+        const trendsCtx = document.getElementById("trendsChart").getContext("2d");
+        const chart = new Chart(trendsCtx, {
+            type: "line",
+            data: {
+                labels: data.historical.map(entry => new Date(entry.timestamp).toLocaleTimeString()),
+                datasets: [{
+                    label: "Temperature (°C)",
+                    data: data.historical.map(entry => entry.temperature),
+                    borderColor: "rgba(255, 99, 132, 1)",
+                    borderWidth: 2,
+                    fill: false,
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: { title: { display: true, text: "Time" } },
+                    y: { title: { display: true, text: "Temperature (°C)" } }
+                }
+            }
+        });
 
-  let isCelsius = true;
+        document.getElementById("unitToggle").addEventListener("change", (e) => {
+            isCelsius = e.target.value === "celsius";
+            
+            document.getElementById("currentTemp").textContent = isCelsius 
+                ? \`\${data.weather.temperature.toFixed(1)}°C\`
+                : \`\${data.weather.temperatureF.toFixed(1)}°F\`;
+            
+            document.getElementById("currentFeelsLike").textContent = isCelsius
+                ? \`\${data.weather.feelsLike.toFixed(1)}°C\`
+                : \`\${data.weather.feelsLikeF.toFixed(1)}°F\`;
 
-  // Initialize Chart.js
-  const chart = new Chart(trendsCtx, {
-    type: "line",
-    data: {
-      labels: data.historical.map((entry) => new Date(entry.timestamp).toLocaleTimeString()),
-      datasets: [
-        {
-          label: `Temperature (${isCelsius ? "°C" : "°F"})`,
-          data: data.historical.map((entry) => (isCelsius ? entry.temperature : entry.temperatureF)),
-          borderColor: "rgba(255, 99, 132, 1)",
-          borderWidth: 2,
-          fill: false,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      scales: {
-        x: {
-          title: {
-            display: true,
-            text: "Time",
-          },
-        },
-        y: {
-          title: {
-            display: true,
-            text: `Temperature (${isCelsius ? "°C" : "°F"})`,
-          },
-        },
-      },
-    },
-  });
+            chart.data.datasets[0].data = data.historical.map(entry => 
+                isCelsius ? entry.temperature : entry.temperatureF
+            );
+            chart.options.scales.y.title.text = \`Temperature (\${isCelsius ? "°C" : "°F"})\`;
+            chart.update();
+        });
 
-  // Update displayed temperatures and chart when toggling units
-  unitToggle.addEventListener("change", () => {
-    isCelsius = unitToggle.value === "celsius";
+        setInterval(async () => {
+            try {
+                const response = await fetch('/api/latest');
+                const newData = await response.json();
+                data.weather = newData.weather;
+                data.historical = newData.historical;
 
-    // Update current state cards
-    currentTemp.textContent = isCelsius
-      ? `${data.weather.temperature.toFixed(1)}°C`
-      : `${data.weather.temperatureF.toFixed(1)}°F`;
-    currentFeelsLike.textContent = isCelsius
-      ? `${data.weather.feelsLike.toFixed(1)}°C`
-      : `${data.weather.feelsLikeF.toFixed(1)}°F`;
+                document.getElementById("currentTemp").textContent = isCelsius 
+                    ? \`\${newData.weather.temperature.toFixed(1)}°C\`
+                    : \`\${newData.weather.temperatureF.toFixed(1)}°F\`;
+                
+                document.getElementById("currentFeelsLike").textContent = isCelsius
+                    ? \`\${newData.weather.feelsLike.toFixed(1)}°C\`
+                    : \`\${newData.weather.feelsLikeF.toFixed(1)}°F\`;
 
-    // Update chart data and axis label
-    chart.data.datasets[0].data = data.historical.map((entry) => (isCelsius ? entry.temperature : entry.temperatureF));
-    chart.options.scales!.y!.title!.text = `Temperature (${isCelsius ? "°C" : "°F"})`;
-    chart.update();
-  });
+                chart.data.labels = newData.historical.map(entry => 
+                    new Date(entry.timestamp).toLocaleTimeString()
+                );
+                chart.data.datasets[0].data = newData.historical.map(entry => 
+                    isCelsius ? entry.temperature : entry.temperatureF
+                );
+                chart.update();
+            } catch (error) {
+                console.error('Failed to fetch updated data:', error);
+            }
+        }, 30000);
+    </script>`;
 };
