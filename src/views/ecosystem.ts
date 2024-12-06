@@ -1,9 +1,16 @@
-import { html } from "lit-html";
 import Chart from "chart.js/auto"; // Ensure Chart.js is installed
 import { EnvironmentalData } from "../types/environmental-data";
 
-export const renderEcosystem = (data: EnvironmentalData) => {
-  const template = html`
+// Render Ecosystem Function
+export const renderEcosystem = (data: EnvironmentalData): void => {
+  const app = document.getElementById("app");
+  if (!app) {
+    console.error("App element not found!");
+    return;
+  }
+
+  // Clear previous content if any
+  app.innerHTML = `
     <div id="ecosystem">
       <!-- Unit Toggle -->
       <div style="margin-bottom: 1rem;">
@@ -43,15 +50,11 @@ export const renderEcosystem = (data: EnvironmentalData) => {
     </div>
   `;
 
-  // Render the template
-  document.getElementById("app")?.appendChild(template as unknown as Node);
-
-  // Add interactivity
   setupChartAndInteractivity(data);
 };
 
 // Function to set up Chart.js and interactivity
-const setupChartAndInteractivity = (data: EnvironmentalData) => {
+const setupChartAndInteractivity = (data: EnvironmentalData): void => {
   const unitToggle = document.getElementById("unitToggle") as HTMLSelectElement;
   const currentTemp = document.getElementById("currentTemp")!;
   const currentFeelsLike = document.getElementById("currentFeelsLike")!;
@@ -69,6 +72,7 @@ const setupChartAndInteractivity = (data: EnvironmentalData) => {
           label: `Temperature (${isCelsius ? "°C" : "°F"})`,
           data: data.historical.map((entry) => (isCelsius ? entry.temperature : entry.temperatureF)),
           borderColor: "rgba(255, 99, 132, 1)",
+          borderWidth: 2,
           fill: false,
         },
       ],
