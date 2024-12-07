@@ -1,5 +1,6 @@
 import sqlite3 from "sqlite3";
 import { open, Database } from "sqlite";
+import { SensorMetadata, sensorMetadata } from "../utils/sensor-metadata";
 
 let db: Database;
 
@@ -9,6 +10,13 @@ export async function initDB() {
     driver: sqlite3.Database,
   });
   console.log("Database connected successfully.");
+}
+
+interface SensorDisplay {
+  id: string;
+  name: string;
+  model: string;
+  readings: Record<string, any>;
 }
 
 export class EnvironmentService {
@@ -55,5 +63,19 @@ export class EnvironmentService {
     }
 
     return result;
+  }
+
+  static async getSensorData(): Promise<SensorDisplay[]> {
+    try {
+      const response = await fetch("/api/sensors");
+      const data = await response.json();
+      return data.map((sensor: any) => ({
+        ...sensor,
+        model: sensorMetadata[sensor.name]?.model || "Unknown Model",
+      }));
+    } catch (error) {
+      console.error("Error fetching sensor data:", error);
+      return [];
+    }
   }
 }

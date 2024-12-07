@@ -2,6 +2,7 @@ export interface SensorMetadata {
   name: string;
   description: string;
   manufacturer: string;
+  model: string;
   metrics: {
     [key: string]: {
       description: string;
@@ -14,6 +15,7 @@ export const sensorMetadata: Record<string, SensorMetadata> = {
   BME280: {
     name: "Environmental Sensor",
     manufacturer: "Bosch",
+    model: "BME280",
     description: "A precision sensor that measures key environmental conditions indoors and outdoors",
     metrics: {
       temperature: {
@@ -37,6 +39,7 @@ export const sensorMetadata: Record<string, SensorMetadata> = {
   TSL25911FN: {
     name: "Light Sensor",
     manufacturer: "AMS",
+    model: "TSL25911FN",
     description: "An advanced light sensor that measures ambient and infrared light levels",
     metrics: {
       light_lux: {
@@ -52,6 +55,7 @@ export const sensorMetadata: Record<string, SensorMetadata> = {
   ICM20948: {
     name: "Motion Sensor",
     manufacturer: "TDK InvenSense",
+    model: "ICM20948",
     description: "A 9-axis motion tracking sensor that measures movement and orientation",
     metrics: {
       accelerometer_x: {
@@ -95,6 +99,7 @@ export const sensorMetadata: Record<string, SensorMetadata> = {
   LTR390: {
     name: "UV Light Sensor",
     manufacturer: "Liteon",
+    model: "LTR390",
     description: "An ultraviolet light sensor that measures UV exposure levels",
     metrics: {
       uv_index: {
@@ -106,6 +111,7 @@ export const sensorMetadata: Record<string, SensorMetadata> = {
   SGP40: {
     name: "Air Quality Sensor",
     manufacturer: "Sensirion",
+    model: "SGP40",
     description: "A gas sensor that detects volatile organic compounds in the air",
     metrics: {
       voc_ppm: {

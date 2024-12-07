@@ -54,12 +54,13 @@ export const renderEcosystem = (data: Record<string, any>): string => {
       return `
          
             <div class="sensor-header">
-              <h2>${sensorInfo?.name || sensorName}</h2>
+              <h2>${sensorInfo.model} - ${sensorInfo?.name || sensorName}</h2>
               ${
                 sensorInfo
                   ? `
               <div class="sensor-info">
                 <p class="sensor-description">${sensorInfo.description}</p>
+                
                 <!-- <span class="sensor-manufacturer">Made by ${sensorInfo.manufacturer}</span> -->
               </div>`
                   : ""
