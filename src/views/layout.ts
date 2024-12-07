@@ -30,42 +30,31 @@ export const layout = (content: string) => `
         background: light-dark(#f0f0f0, #1a1a1a);
       }
 
-      body > *:not(.grid) {
+      body > *:not(.grid, .sensor-section) {
         max-width: 800px;
       }
 
       .card {
-        padding: .5rem;
+        padding: 1rem;
         border: 1px solid light-dark(#2a2a2a, #f0f0f0);
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 1rem;
-      }
-
-      .card-icon {
-        line-height: 1;
-        padding-top: 0.25rem;
-      }
-
-      .card-body {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
       }
 
       .card-title {
-        line-height: 1.3;
+        margin-bottom: 1rem;
+        font-weight: bold;
       }
 
-      .card-value {
-        font-weight: bold;
+      .chart-wrapper {
+        position: relative;
+        height: 300px;
+        width: 100%;
       }
 
       .sensor-section {
         display: flex;
         flex-direction: column;
         gap: 1rem;
-  }
+      }
 
       .sensor-header {
         display: flex;
@@ -92,14 +81,16 @@ export const layout = (content: string) => `
       }
 
       @media (max-width: 600px) {
+        body {
+          padding: 1rem;
+        }
+
         .grid {
           grid-template-columns: 1fr;
         }
-      }
 
-      @media (max-width: 600px) {
-        body {
-          padding: 1rem;
+        .chart-wrapper {
+          height: 200px;
         }
       }
     </style>
