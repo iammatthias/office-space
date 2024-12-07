@@ -1,28 +1,29 @@
-import { join } from "path";
-import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { marked } from "marked";
-import { readFileSync } from "fs";
+import { serve } from "@hono/node-server";
+import { initDB, EnvironmentService } from "./services/environment.service";
 import { layout } from "./views/layout";
 import { renderEcosystem } from "./views/ecosystem";
-import { getEnvironmentData } from "./services/environment/environment.service";
 
 const app = new Hono();
 
-// Home route
+app.use("*", async (c, next) => {
+  await next();
+});
+
+// Route to fetch and display all sensors' latest data
 app.get("/", async (c) => {
-  const home = readFileSync(join(__dirname, "content/home.md"), "utf-8");
-  const data = await getEnvironmentData();
-
-  return c.html(
-    layout(`
-      ${marked(home)}
-      ${renderEcosystem(data)}
-    `)
-  );
+  try {
+    const latestReadings = await EnvironmentService.fetchLatestReadings();
+    const content = renderEcosystem(latestReadings);
+    return c.html(layout(content));
+  } catch (error) {
+    console.error("Error fetching sensor data:", error);
+    return c.html(layout("<p>Error fetching sensor data.</p>"));
+  }
 });
 
-// Serve the app
-serve(app, (info) => {
-  console.log(`Office-Space Environment Monitor is live on http://localhost:${info.port}`);
-});
+(async () => {
+  await initDB();
+  const port = 3000;
+  serve({ fetch: app.fetch, port });
+})();

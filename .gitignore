@@ -3,7 +3,7 @@ node_modules
 .pnpm-store
 
 # Environment
-.env
+.env*
 
 # Build
 dist
@@ -11,3 +11,8 @@ dist
 # System
 .DS_Store
 *.log
+
+# Ignore database files
+*.db
+*.sqlite
+*.py
