@@ -1,27 +1,22 @@
 import sqlite3 from "sqlite3";
 import { open, Database } from "sqlite";
-import { SensorMetadata, sensorMetadata } from "../utils/sensor-metadata";
 
-let db: Database;
-
-export async function initDB() {
-  db = await open({
-    filename: process.env.DB_PATH || "./environment.db",
-    driver: sqlite3.Database,
-  });
-  console.log("Database connected successfully.");
-}
-
-export interface SensorDisplay {
-  id: string;
-  name: string;
-  model: string;
-  readings: Record<string, any>;
-}
-
+// Type Definitions
 export interface TimeRange {
   start: Date;
   end: Date;
+}
+
+export interface SummaryReading {
+  date: number;
+  [key: string]: number;
+}
+
+export interface SensorConfig {
+  table: string; // Raw sensor data table
+  dailySummary: string; // Precomputed daily summary table
+  allTimeSummary: string; // Precomputed all-time summary table
+  fields: string[];
 }
 
 export interface HistoricalReading {
@@ -30,230 +25,173 @@ export interface HistoricalReading {
   readings: Record<string, number>;
 }
 
-export interface SensorStatistics {
-  min: number;
-  max: number;
-  avg: number;
-  count: number;
+let db: Database;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const cache = new Map<string, { data: any; timestamp: number }>();
+
+export async function initDB() {
+  db = await open({
+    filename: "./db/sensor_data.db",
+    driver: sqlite3.Database,
+  });
+
+  await db.exec(`
+    PRAGMA journal_mode=WAL;
+    PRAGMA synchronous=NORMAL;
+    PRAGMA cache_size=-2000;
+    PRAGMA temp_store=MEMORY;
+  `);
+
+  console.log("Database connected successfully.");
 }
 
 export class EnvironmentService {
-  //debug
-  static async debugDatabaseContent() {
-    // Check sensors table
-    const sensors = await db.all("SELECT * FROM sensors");
-    console.log("Sensors:", sensors);
+  private static readonly sensorConfig: Record<string, SensorConfig> = {
+    Environmental: {
+      table: "bme280_data",
+      dailySummary: "bme280_daily_summary",
+      allTimeSummary: "bme280_all_time_summary",
+      fields: ["temperature", "humidity", "pressure"],
+    },
+    Light: {
+      table: "tsl2591_data",
+      dailySummary: "tsl2591_daily_summary",
+      allTimeSummary: "tsl2591_all_time_summary",
+      fields: ["light_intensity"],
+    },
+    UV: {
+      table: "ltr390_data",
+      dailySummary: "ltr390_daily_summary",
+      allTimeSummary: "ltr390_all_time_summary",
+      fields: ["uv_index"],
+    },
+    VOC: {
+      table: "sgp40_data",
+      dailySummary: "sgp40_daily_summary",
+      allTimeSummary: "sgp40_all_time_summary",
+      fields: ["voc_gas"],
+    },
+    Motion: {
+      table: "motion_data",
+      dailySummary: "motion_daily_summary",
+      allTimeSummary: "motion_all_time_summary",
+      fields: [
+        "roll",
+        "pitch",
+        "yaw",
+        "acceleration_x",
+        "acceleration_y",
+        "acceleration_z",
+        "gyroscope_x",
+        "gyroscope_y",
+        "gyroscope_z",
+        "magnetic_x",
+        "magnetic_y",
+        "magnetic_z",
+      ],
+    },
+  };
 
-    // Check readings
-    const readings = await db.all("SELECT * FROM readings ORDER BY time DESC LIMIT 5");
-    console.log("Recent readings:", readings);
+  private static readonly sensorOrder = ["Environmental", "Light", "UV", "VOC", "Motion"];
 
-    // Check each sensor's data table
-    const sensorTables = ["bme280_data", "tsl25911fn_data", "icm20948_data", "ltr390_data", "sgp40_data"];
-    for (const table of sensorTables) {
-      const data = await db.all(`SELECT * FROM ${table} LIMIT 5`);
-      console.log(`${table}:`, data);
+  private static getFromCache(key: string): any | null {
+    const cached = cache.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  private static setCache(key: string, data: any): void {
+    cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  private static sortBySensorOrder<T>(data: Record<string, T>): Record<string, T> {
+    return Object.fromEntries(
+      this.sensorOrder
+        .filter((key) => key in data) // Ensure we only include valid sensor names
+        .map((key) => [key, data[key]])
+    );
+  }
+
+  /**
+   * Fetch all historical data for a specific sensor.
+   * This function is used to lazy load data for each sensor individually.
+   */
+  static async fetchRawHistoricalData(sensorName: string): Promise<HistoricalReading[]> {
+    const config = this.sensorConfig[sensorName];
+    if (!config) {
+      throw new Error(`Sensor ${sensorName} not found`);
     }
 
-    // Check joined data
-    const joinedExample = await db.all(`
-      SELECT r.time, r.sensor_id, s.name, b.*
-      FROM readings r
-      JOIN sensors s ON r.sensor_id = s.id
-      LEFT JOIN bme280_data b ON r.id = b.reading_id
-      ORDER BY r.time DESC
-      LIMIT 5
-    `);
-    console.log("Joined data example:", joinedExample);
-  }
+    const fields = ["timestamp", ...config.fields];
+    const query = `SELECT timestamp, ${fields.join(", ")} FROM ${config.table} ORDER BY timestamp ASC`;
 
-  // end debug
-
-  static async getLatestDataTimestamp(): Promise<Date> {
-    const result = await db.get(`
-      SELECT time FROM readings 
-      ORDER BY time DESC 
-      LIMIT 1
-    `);
-    console.log("Latest timestamp from DB:", result?.time);
-    return result?.time ? new Date(result.time) : new Date();
-  }
-
-  static async getEarliestDataTimestamp(): Promise<Date> {
-    const result = await db.get(`
-      SELECT MIN(time) as earliest_time
-      FROM readings
-    `);
-    return result.earliest_time ? new Date(result.earliest_time) : new Date();
-  }
-
-  static async fetchLatestReadings() {
-    const result: Record<string, any> = {};
-    const sensors = await db.all("SELECT id, name FROM sensors");
-
-    for (const sensor of sensors) {
-      const { id: sensorId, name } = sensor;
-      const reading = await db.get("SELECT id, time FROM readings WHERE sensor_id = ? ORDER BY time DESC LIMIT 1", [
-        sensorId,
-      ]);
-
-      if (!reading) continue;
-
-      let tableData = null;
-      switch (name) {
-        case "BME280":
-          tableData = await db.get("SELECT * FROM bme280_data WHERE reading_id = ?", [reading.id]);
-          break;
-        case "TSL25911FN":
-          tableData = await db.get("SELECT * FROM tsl25911fn_data WHERE reading_id = ?", [reading.id]);
-          break;
-        case "ICM20948":
-          tableData = await db.get("SELECT * FROM icm20948_data WHERE reading_id = ?", [reading.id]);
-          break;
-        case "LTR390":
-          tableData = await db.get("SELECT * FROM ltr390_data WHERE reading_id = ?", [reading.id]);
-          break;
-        case "SGP40":
-          tableData = await db.get("SELECT * FROM sgp40_data WHERE reading_id = ?", [reading.id]);
-          break;
-      }
-
-      if (tableData) {
-        result[name] = {
-          ...tableData,
-          timestamp: reading.time,
-        };
-      }
-    }
-
-    return result;
-  }
-
-  static async getSensorData(): Promise<SensorDisplay[]> {
     try {
-      const response = await fetch("/api/sensors");
-      const data = await response.json();
-      return data.map((sensor: any) => ({
-        ...sensor,
-        model: sensorMetadata[sensor.name]?.model || "Unknown Model",
-      }));
-    } catch (error) {
-      console.error("Error fetching sensor data:", error);
-      return [];
-    }
-  }
+      const data = await db.all(query);
 
-  static async fetchHistoricalData(timeRange: TimeRange, sensorNames?: string[]): Promise<HistoricalReading[]> {
-    console.log("Fetching historical data:", {
-      timeRange: {
-        start: timeRange.start.toISOString(),
-        end: timeRange.end.toISOString(),
-      },
-      sensorNames,
-    });
-
-    const result: HistoricalReading[] = [];
-
-    // Format dates for SQLite
-    const startStr = timeRange.start.toISOString().replace("T", " ").replace("Z", "");
-    const endStr = timeRange.end.toISOString().replace("T", " ").replace("Z", "");
-
-    let sensorQuery = "SELECT id, name FROM sensors";
-    if (sensorNames?.length) {
-      sensorQuery += ` WHERE name IN (${sensorNames.map((name) => `'${name}'`).join(",")})`;
-    }
-
-    const sensors = await db.all(sensorQuery);
-    console.log("Found sensors:", sensors);
-
-    for (const sensor of sensors) {
-      // Get the appropriate table name and fields for this sensor type
-      let sensorTableFields = "";
-      switch (sensor.name) {
-        case "BME280":
-          sensorTableFields = "temperature, humidity, pressure, altitude";
-          break;
-        case "TSL25911FN":
-          sensorTableFields = "light_lux, ir_light";
-          break;
-        case "ICM20948":
-          sensorTableFields =
-            "accelerometer_x, accelerometer_y, accelerometer_z, gyroscope_x, gyroscope_y, gyroscope_z, magnetometer_x, magnetometer_y, magnetometer_z";
-          break;
-        case "LTR390":
-          sensorTableFields = "uv_index";
-          break;
-        case "SGP40":
-          sensorTableFields = "voc_ppm";
-          break;
-        default:
-          continue;
-      }
-
-      const query = `
-        SELECT r.time, ${sensorTableFields}
-        FROM readings r
-        INNER JOIN ${sensor.name.toLowerCase()}_data sd ON sd.reading_id = r.id
-        WHERE r.sensor_id = ?
-        AND datetime(r.time) BETWEEN datetime(?) AND datetime(?)
-        ORDER BY r.time ASC
-      `;
-
-      const readings = await db.all(query, [sensor.id, startStr, endStr]);
-      console.log(`Found ${readings.length} readings for sensor ${sensor.name}`);
-
-      readings.forEach((reading) => {
-        const { time, ...metrics } = reading;
-        result.push({
-          timestamp: time,
-          sensorName: sensor.name,
-          readings: metrics as Record<string, number>,
-        });
+      // Map the results to include the sensor name and readings
+      return data.map((row) => {
+        const { timestamp, ...readings } = row;
+        return {
+          timestamp,
+          sensorName,
+          readings,
+        };
       });
+    } catch (error) {
+      console.error(`Error fetching data for sensor ${sensorName}:`, error);
+      throw error;
     }
-
-    console.log("Total historical readings:", result.length);
-    return result;
   }
 
-  static async getSensorStatistics(
-    sensorName: string,
-    timeRange: TimeRange
-  ): Promise<Record<string, SensorStatistics>> {
-    const { id: sensorId } = await db.get("SELECT id FROM sensors WHERE name = ?", [sensorName]);
+  static async fetchLatestSummaries(): Promise<Record<string, SummaryReading>> {
+    const cacheKey = "latest_all_time_summaries";
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
 
-    if (!sensorId) return {};
+    const result: Record<string, SummaryReading> = {};
+    await Promise.all(
+      Object.entries(this.sensorConfig).map(async ([sensorName, config]) => {
+        const sql = `SELECT * FROM ${config.allTimeSummary} LIMIT 1`;
+        try {
+          const summary = await db.get(sql);
+          if (summary) {
+            result[sensorName] = summary;
+          }
+        } catch (error) {
+          console.error(`Error fetching all-time summary for ${sensorName}:`, error);
+        }
+      })
+    );
 
-    const tableName = `${sensorName.toLowerCase()}_data`;
-    const columns = await db.all(`PRAGMA table_info(${tableName})`);
-    const metrics = columns.map((col) => col.name).filter((name) => name !== "reading_id");
+    const sortedResult = this.sortBySensorOrder(result);
+    this.setCache(cacheKey, sortedResult);
+    return sortedResult;
+  }
 
-    const stats: Record<string, SensorStatistics> = {};
+  static async fetchDailySummaries(): Promise<Record<string, SummaryReading[]>> {
+    const cacheKey = "latest_daily_summaries";
+    const cached = this.getFromCache(cacheKey);
+    if (cached) return cached;
 
-    for (const metric of metrics) {
-      const result = await db.get(
-        `
-        SELECT 
-          MIN(${metric}) as min,
-          MAX(${metric}) as max,
-          AVG(${metric}) as avg,
-          COUNT(${metric}) as count
-        FROM ${tableName}
-        JOIN readings ON ${tableName}.reading_id = readings.id
-        WHERE readings.sensor_id = ?
-        AND readings.time BETWEEN ? AND ?
-      `,
-        [sensorId, timeRange.start.toISOString(), timeRange.end.toISOString()]
-      );
+    const result: Record<string, SummaryReading[]> = {};
+    await Promise.all(
+      Object.entries(this.sensorConfig).map(async ([sensorName, config]) => {
+        const sql = `SELECT * FROM ${config.dailySummary} ORDER BY date DESC LIMIT 30`;
+        try {
+          const summaries = await db.all(sql);
+          if (summaries) {
+            result[sensorName] = summaries;
+          }
+        } catch (error) {
+          console.error(`Error fetching daily summary for ${sensorName}:`, error);
+        }
+      })
+    );
 
-      stats[metric] = {
-        min: result.min,
-        max: result.max,
-        avg: result.avg,
-        count: result.count,
-      };
-    }
-
-    return stats;
+    const sortedResult = this.sortBySensorOrder(result);
+    this.setCache(cacheKey, sortedResult);
+    return sortedResult;
   }
 }

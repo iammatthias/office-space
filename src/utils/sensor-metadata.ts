@@ -1,122 +1,122 @@
-export interface SensorMetadata {
-  name: string;
+// src/utils/sensor-metadata.ts
+
+export interface MetricInfo {
   description: string;
-  manufacturer: string;
-  model: string;
-  metrics: {
-    [key: string]: {
-      description: string;
-      unit?: string;
-    };
-  };
+  unit?: string;
 }
 
-export const sensorMetadata: Record<string, SensorMetadata> = {
-  BME280: {
+export interface SensorInfo {
+  name: string;
+  model: string;
+  description: string;
+  metrics: Record<string, MetricInfo>;
+}
+
+export const sensorMetadata: Record<string, SensorInfo> = {
+  Environmental: {
     name: "Environmental Sensor",
-    manufacturer: "Bosch",
     model: "BME280",
-    description: "A precision sensor that measures key environmental conditions indoors and outdoors",
+    description: "High-precision environmental monitoring sensor",
     metrics: {
       temperature: {
-        description: "Air temperature around the sensor",
+        description: "Temperature",
         unit: "°C",
       },
       humidity: {
-        description: "Amount of water vapor in the air",
+        description: "Relative Humidity",
         unit: "%",
       },
       pressure: {
-        description: "Atmospheric pressure, which can indicate weather changes",
+        description: "Atmospheric Pressure",
         unit: "hPa",
       },
-      altitude: {
-        description: "Estimated altitude based on pressure readings",
-        unit: "m",
-      },
     },
   },
-  TSL25911FN: {
+  Light: {
     name: "Light Sensor",
-    manufacturer: "AMS",
-    model: "TSL25911FN",
-    description: "An advanced light sensor that measures ambient and infrared light levels",
+    model: "TSL2591",
+    description: "High-dynamic range light sensor",
     metrics: {
-      light_lux: {
-        description: "Ambient light intensity, similar to what human eyes perceive",
-        unit: "lux",
-      },
-      ir_light: {
-        description: "Infrared light levels, invisible to human eyes but important for plant growth",
+      light_intensity: {
+        description: "Light Intensity",
         unit: "lux",
       },
     },
   },
-  ICM20948: {
-    name: "Motion Sensor",
-    manufacturer: "TDK InvenSense",
-    model: "ICM20948",
-    description: "A 9-axis motion tracking sensor that measures movement and orientation",
+  UV: {
+    name: "UV Light Sensor",
+    model: "LTR390",
+    description: "UV index and ambient light sensor",
     metrics: {
-      accelerometer_x: {
-        description: "Forward/backward tilt movement",
+      uv_index: {
+        description: "UV Index",
+        unit: "UV",
+      },
+    },
+  },
+  VOC: {
+    name: "Air Quality Sensor",
+    model: "SGP40",
+    description: "Volatile organic compounds sensor",
+    metrics: {
+      voc_gas: {
+        description: "VOC Gas Level",
+        unit: "ppb",
+      },
+    },
+  },
+  Motion: {
+    name: "Motion Sensor",
+    model: "ICM20948/MPU925x",
+    description: "9-DOF motion tracking sensor",
+    metrics: {
+      roll: {
+        description: "Roll",
+        unit: "°",
+      },
+      pitch: {
+        description: "Pitch",
+        unit: "°",
+      },
+      yaw: {
+        description: "Yaw",
+        unit: "°",
+      },
+      acceleration_x: {
+        description: "X Acceleration",
         unit: "g",
       },
-      accelerometer_y: {
-        description: "Left/right tilt movement",
+      acceleration_y: {
+        description: "Y Acceleration",
         unit: "g",
       },
-      accelerometer_z: {
-        description: "Up/down movement",
+      acceleration_z: {
+        description: "Z Acceleration",
         unit: "g",
       },
       gyroscope_x: {
-        description: "Rotation around forward axis",
+        description: "X Angular Velocity",
         unit: "°/s",
       },
       gyroscope_y: {
-        description: "Rotation around side axis",
+        description: "Y Angular Velocity",
         unit: "°/s",
       },
       gyroscope_z: {
-        description: "Rotation around vertical axis",
+        description: "Z Angular Velocity",
         unit: "°/s",
       },
-      magnetometer_x: {
-        description: "Magnetic field strength in X axis",
-        unit: "µT",
+      magnetic_x: {
+        description: "X Magnetic Field",
+        unit: "μT",
       },
-      magnetometer_y: {
-        description: "Magnetic field strength in Y axis",
-        unit: "µT",
+      magnetic_y: {
+        description: "Y Magnetic Field",
+        unit: "μT",
       },
-      magnetometer_z: {
-        description: "Magnetic field strength in Z axis",
-        unit: "µT",
-      },
-    },
-  },
-  LTR390: {
-    name: "UV Light Sensor",
-    manufacturer: "Liteon",
-    model: "LTR390",
-    description: "An ultraviolet light sensor that measures UV exposure levels",
-    metrics: {
-      uv_index: {
-        description: "UV radiation intensity on a scale of 1-11+",
-        unit: "UV index",
-      },
-    },
-  },
-  SGP40: {
-    name: "Air Quality Sensor",
-    manufacturer: "Sensirion",
-    model: "SGP40",
-    description: "A gas sensor that detects volatile organic compounds in the air",
-    metrics: {
-      voc_ppm: {
-        description: "Concentration of volatile organic compounds - indicates air quality",
-        unit: "ppm",
+      magnetic_z: {
+        description: "Z Magnetic Field",
+        unit: "μT",
       },
     },
   },

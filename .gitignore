@@ -15,4 +15,3 @@ dist
 # Ignore database files
 *.db
 *.sqlite
-*.py

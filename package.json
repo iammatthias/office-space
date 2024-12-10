@@ -7,11 +7,11 @@
   "dependencies": {
     "@hono/node-server": "^1.13.7",
     "chart.js": "^4.4.7",
+    "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
     "marked": "^12.0.2",
     "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7",
-    "recharts": "^2.12.0"
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@types/node": "^20.17.9",

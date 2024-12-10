@@ -4,140 +4,88 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { initDB, EnvironmentService } from "./services/environment.service";
 import { layout } from "./views/layout";
 import { renderEcosystem } from "./views/ecosystem";
-import { renderHistoricalView } from "./views/historical";
+import { renderHistorical } from "./views/historical";
 import { marked } from "marked";
 import { readFileSync } from "fs";
 import { join } from "path";
 
 const app = new Hono();
 
-// Serve static files with a simpler configuration
+// Serve static files
 app.use("/static/*", serveStatic({ root: "./" }));
 
-app.use("*", async (c, next) => {
-  await next();
-});
-
-// Route to fetch and display all sensors' latest data
+// Home Route
 app.get("/", async (c) => {
   try {
-    // Read the home markdown content
-    const home = readFileSync(join(__dirname, "content/home.md"), "utf-8");
+    // Load markdown content for the homepage
+    const homeContent = readFileSync(join(__dirname, "content/home.md"), "utf-8");
 
-    // Fetch latest readings
-    const latestReadings = await EnvironmentService.fetchLatestReadings();
-    const ecosystemContent = renderEcosystem(latestReadings);
+    // Fetch precomputed all-time summaries and daily summaries
+    const allTimeSummaries = await EnvironmentService.fetchLatestSummaries();
+    const dailySummaries = await EnvironmentService.fetchDailySummaries();
 
-    // Get the latest timestamp from the database
-    const endDate = await EnvironmentService.getLatestDataTimestamp();
-    const startDate = new Date(endDate);
-    startDate.setHours(startDate.getHours() - 24);
+    const datasets = [
+      {
+        title: "All-Time Summaries",
+        data: Object.fromEntries(
+          Object.entries(allTimeSummaries).map(([key, value]) => [
+            key,
+            [value], // Wrap single `SummaryReading` objects into an array
+          ])
+        ),
+      },
+      {
+        title: "Daily Summaries (Last 30 Days)",
+        data: Object.fromEntries(
+          Object.entries(dailySummaries).map(([key, value]) => [
+            key,
+            value, // Ensure daily summaries are arrays already
+          ])
+        ),
+      },
+    ];
 
-    console.log("Using date range:", {
-      start: startDate.toISOString(),
-      end: endDate.toISOString(),
-    });
+    // Render ecosystem view with fetched summaries
+    const ecosystemContent = renderEcosystem(datasets);
 
-    const historicalData = await EnvironmentService.fetchHistoricalData({
-      start: startDate,
-      end: endDate,
-    });
+    // Pass the list of sensor names to the historical data view for lazy loading
+    const sensorNames = Object.keys(EnvironmentService["sensorConfig"]);
+    const historicalContent = renderHistorical(sensorNames);
 
-    const historicalContent = renderHistoricalView(historicalData, {
-      start: startDate.toISOString(),
-      end: endDate.toISOString(),
-    });
-
-    // Combine all content
-    const content = `
-      ${marked.parse(home)}
-
-        ${ecosystemContent}
-
-        ${historicalContent}
-
+    // Combine all rendered content
+    const finalContent = `
+      ${marked.parse(homeContent)}
+      ${ecosystemContent}
+      ${historicalContent}
     `;
 
-    // Add Chart.js to the layout
-    const layoutWithChartJs = (content: string) =>
-      layout(`
-      <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-      <style>
-        .content-section {
-          margin: 2rem 0;
-          padding: 1rem;
-          border-radius: 0.5rem;
-          background: var(--background);
-        }
-        .content-section h2 {
-          margin-bottom: 1rem;
-        }
-        .charts-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-          gap: 1rem;
-          padding: 1rem;
-        }
-        .metric-chart {
-          background: var(--background-light);
-          padding: 1rem;
-          border-radius: 0.5rem;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .metric-chart h3 {
-          margin-bottom: 0.5rem;
-        }
-        .time-range {
-          margin: 1rem 0;
-          padding: 0.5rem;
-          background: var(--background-light);
-          border-radius: 0.25rem;
-        }
-      </style>
-      ${content}
-    `);
-
-    return c.html(layoutWithChartJs(content));
+    return c.html(layout(finalContent));
   } catch (error) {
     console.error("Error fetching data:", error);
-    return c.html(layout("<p>Error fetching data.</p>"));
+    return c.html(layout("<p>Error fetching data. Please try again later.</p>"));
   }
 });
 
-// API routes for supporting data
-app.get("/api/timeranges", async (c) => {
+// API Route for Fetching Historical Data for a Specific Sensor
+app.get("/api/historical-data/:sensorName", async (c) => {
+  const { sensorName } = c.req.param(); // Get the sensor name from the URL parameters
+
   try {
-    const latest = await EnvironmentService.getLatestDataTimestamp();
-    const earliest = await EnvironmentService.getEarliestDataTimestamp();
-    return c.json({
-      earliest: earliest.toISOString(),
-      latest: latest.toISOString(),
-    });
+    // Fetch historical data for the requested sensor
+    const historicalData = await EnvironmentService.fetchRawHistoricalData(sensorName);
+
+    // Respond with the data for the requested sensor
+    return c.json(historicalData);
   } catch (error) {
-    console.error("Error fetching time ranges:", error);
-    return c.json({ error: "Failed to fetch time ranges" }, 500);
+    console.error(`Error fetching data for sensor ${sensorName}:`, error);
+    return c.json({ error: `Failed to fetch data for sensor ${sensorName}` }, 500);
   }
 });
 
-app.get("/api/stats/:sensor", async (c) => {
-  try {
-    const sensorName = c.req.param("sensor");
-    const end = await EnvironmentService.getLatestDataTimestamp();
-    const start = new Date(end);
-    start.setHours(start.getHours() - 24);
-
-    const stats = await EnvironmentService.getSensorStatistics(sensorName, { start, end });
-    return c.json(stats);
-  } catch (error) {
-    console.error("Error fetching sensor statistics:", error);
-    return c.json({ error: "Failed to fetch sensor statistics" }, 500);
-  }
-});
-
+// Initialize database and start server
 (async () => {
   await initDB();
-  console.log("Debugging database content...");
-  await EnvironmentService.debugDatabaseContent();
   const port = 3000;
   serve({ fetch: app.fetch, port });
+  console.log(`Server is running at http://localhost:${port}`);
 })();
