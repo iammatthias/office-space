@@ -1,46 +1,100 @@
 :root {
-  font-family: monospace;
-  line-height: 1.5;
-  font-weight: 400;
+  /* Enable light-dark mode switching */
+  color-scheme: light dark;
 
-  color: #213547;
-  background-color: #ffffff;
+  /* Typography */
+  --font-size-xs: 0.75rem; /* 12px */
+  --font-size-sm: 0.875rem; /* 14px */
+  --font-size-base: 1rem; /* 16px */
+  --font-size-lg: 1.125rem; /* 18px */
+  --font-size-xl: 1.25rem; /* 20px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  font-family: monospace;
+  line-height: 1.6;
+  font-weight: var(--font-weight-normal);
+
+  /* Base colors using light-dark() - improved contrast */
+  --background-color: light-dark(#ffffff, #121416);
+  --background-translucent: light-dark(rgba(255, 255, 255, 0.98), rgba(18, 20, 22, 0.98));
+  --text-color: light-dark(#121416, #ffffff);
+  --text-secondary: light-dark(#374151, #d1d5db);
+  --text-tertiary: light-dark(#4b5563, #9ca3af);
+
+  /* UI colors - enhanced contrast */
+  --primary-color: light-dark(#1971c2, #4dabf7);
+  --error-color: light-dark(#e03131, #ff8787);
+  --border-color: light-dark(#dee2e6, #343a40);
+  --hover-background: light-dark(#f1f3f5, #343a40);
+
+  /* Interactive states - improved visibility */
+  --hover-emphasis: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.08));
+  --active-emphasis: light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.16));
+
+  /* Component specific */
+  --shadow-color: light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.3));
+  --shadow-color-darker: light-dark(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.5));
+  --overlay-background: light-dark(rgba(255, 255, 255, 0.95), rgba(18, 20, 22, 0.95));
+  --spinner-background: light-dark(#e9ecef, #343a40);
+  --spinner-foreground: var(--primary-color);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  --background-color: #ffffff;
-  --border-color: #e9ecef;
-  --text-color: #6c757d;
-  --text-secondary: #6c757d;
-  --primary-color: #228be6;
-  --error-color: #fa5252;
-  --hover-background: #f8f9fa;
 }
 
-/* Add dark theme support if needed */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background-color: #1a1b1e;
-    --border-color: #2c2e33;
-    --text-color: #e9ecef;
-    --text-secondary: #adb5bd;
-    --hover-background: #2c2e33;
-  }
-}
-
-html,
-body {
-  height: 100%;
+* {
   margin: 0;
   padding: 0;
 }
 
+body {
+  padding: 2rem 1rem;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-size: var(--font-size-base);
+}
+
 body > #root {
-  padding: 1rem;
   display: flex;
   flex-direction: column;
+  gap: 2rem;
+  position: relative;
+  max-width: 80ch;
+  width: 100%;
+  min-height: 101vh;
+  height: 100%;
+  margin: 0 auto;
+}
+
+ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-left: 2rem;
+}
+
+footer {
+  font-size: var(--font-size-sm);
+  * {
+    color: var(--text-secondary);
+  }
+}
+
+h1 {
+  display: flex;
+  flex-direction: row;
   gap: 1rem;
+  align-items: center;
+  img {
+    width: 26px;
+    height: 26px;
+    @media (prefers-color-scheme: dark) {
+      filter: invert(1);
+    }
+  }
 }

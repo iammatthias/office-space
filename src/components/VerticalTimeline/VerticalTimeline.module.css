@@ -1,165 +1,388 @@
-.container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  width: 100%;
-  position: relative;
-  overflow: hidden;
-}
-
 .legend {
   position: sticky;
   top: 0;
-  left: 0;
-  right: 0;
-  z-index: 10;
-  background: var(--background-color, #ffffff);
-  padding: 1rem;
-  border-bottom: 1px solid var(--border-color, #e9ecef);
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  max-height: 40vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  position: -webkit-sticky;
-  will-change: transform;
+  flex-direction: column;
+  background: var(--background-translucent);
+  border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(8px);
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+.legendHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.legendHeader:hover {
+  background-color: var(--hover-emphasis);
+}
+
+.legendHeader:active {
+  background-color: var(--active-emphasis);
+}
+
+.legendTitle {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-lg);
+  color: var(--text-color);
+}
+
+.legendToggle {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--hover-emphasis);
+  transition: all 0.2s ease;
+}
+
+.legendToggle:hover {
+  background: var(--active-emphasis);
+}
+
+.legendContent {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 0;
+}
+
+.legendExpanded .legendContent {
+  max-height: 300px;
+  padding: 0.75rem 1rem;
+  opacity: 1;
+  visibility: visible;
+  margin: 0.25rem 0;
 }
 
 .legendItem {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
   cursor: pointer;
-  transition: background-color 0.2s ease;
-  font-size: 0.875rem;
-  border: 1px solid transparent;
+  transition: all 0.2s ease;
+  font-size: var(--font-size-sm);
+  background: var(--hover-emphasis);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
 }
 
-.legendItem:hover,
+.legendItem:hover {
+  background: var(--active-emphasis);
+}
+
 .legendItemActive {
-  background-color: var(--hover-background, #f8f9fa);
-  border-color: var(--border-color, #e9ecef);
+  background: var(--active-emphasis);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-color);
 }
 
 .legendColor {
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
+  border: 2px solid var(--background-color);
+  box-shadow: 0 0 0 1px var(--shadow-color);
   flex-shrink: 0;
 }
 
-.timelineWrapper {
+.legendItemActive .legendColor {
+  transform: scale(1.2);
+}
+
+@media (max-width: 768px) {
+  .legend {
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 8px var(--shadow-color);
+  }
+
+  .legendContent {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+
+  .legendItem {
+    font-size: var(--font-size-xs);
+  }
+
+  .timeLabel {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: -0.01em;
+  }
+
+  .dateLabel {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .tooltipValue {
+    font-size: var(--font-size-lg);
+  }
+
+  .tooltipTime {
+    font-size: var(--font-size-xs);
+  }
+
+  .timelineContent {
+    margin: 0.5rem 0;
+  }
+}
+
+.scrollContainer {
   flex: 1;
+  overflow-y: auto;
   position: relative;
-  overflow: hidden;
-  padding-top: 1rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .timelineContent {
   position: relative;
+  margin: 1rem 0;
   width: 100%;
-  height: 100%;
-  overflow-y: auto;
+  max-width: 100%;
   overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  will-change: transform;
 }
 
-/* Update existing styles */
-.path {
-  pointer-events: none;
+.timelineSvg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: all;
+}
+
+.sensorGroup {
+  pointer-events: all;
+  transition: all 0.3s ease;
+}
+
+.sensorLine {
+  fill: none;
+  stroke-width: 1.75;
+  opacity: 0.35;
+  transition: all 0.3s ease;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.sensorLineActive {
+  opacity: 1;
+  stroke-width: 2.25;
 }
 
 .dataPoint {
-  pointer-events: none;
+  stroke: var(--background-color);
+  stroke-width: 2;
+  opacity: 0.35;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.dataPointActive {
+  opacity: 1;
+  stroke-width: 2.5;
+}
+
+.sensorGroup:hover .sensorLine,
+.sensorLine:hover {
+  opacity: 1;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 3px var(--shadow-color-darker));
+}
+
+.sensorGroup:hover .dataPoint circle,
+.dataPoint:hover circle {
+  opacity: 1;
+  filter: drop-shadow(0 0 2px var(--shadow-color));
+  transform: scale(1.5);
   transform-origin: center;
-}
-
-.timelineLabel {
-  font-size: 0.75rem;
-  fill: var(--text-color, #6c757d);
-}
-
-.timelineLabelDate {
-  font-weight: 600;
+  transition: all 0.3s ease;
 }
 
 .tooltip {
   position: fixed;
-  background: var(--background-color, #ffffff);
-  padding: 0.75rem;
-  border-radius: 0.25rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background: var(--background-color);
+  padding: 1rem;
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 20px var(--shadow-color), 0 1px 3px var(--shadow-color-darker);
+  border-left: 4px solid var(--primary-color);
   pointer-events: none;
-  border-left: 3px solid;
-  z-index: 20;
+  z-index: 3;
+  max-width: 300px;
+  font-size: 0.9375rem;
+  transform: translate(-50%, -100%);
+  margin-top: -1rem;
 }
 
 .tooltipValue {
-  font-weight: 600;
-  margin-bottom: 0.25rem;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl);
+  line-height: 1.4;
+  color: var(--text-color);
 }
 
 .tooltipTime {
-  font-size: 0.75rem;
-  color: var(--text-secondary, #6c757d);
+  margin-top: 0.375rem;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
 }
 
-.loadingContainer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  width: 100%;
-}
-
-.loadingSpinner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
-.spinner {
-  width: 2rem;
-  height: 2rem;
-  border: 2px solid var(--border-color, #e9ecef);
-  border-top-color: var(--primary-color, #228be6);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.loadingIndicator {
-  padding: 1rem;
-  text-align: center;
-}
-
+.loadingContainer,
 .errorContainer {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
   width: 100%;
-  color: var(--error-color, #fa5252);
-  padding: 1rem;
+}
+
+.loadingOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--overlay-background);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+}
+
+.loadingSpinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid var(--spinner-background);
+  border-top: 3px solid var(--spinner-foreground);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  to {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
     transform: rotate(360deg);
   }
 }
 
-/* Add responsive styles */
+.errorContainer {
+  color: var(--error-color);
+  text-align: center;
+  padding: 2rem;
+}
+
+.timeLabel {
+  font-size: var(--font-size-sm);
+  fill: var(--text-secondary);
+  user-select: none;
+  font-weight: var(--font-weight-medium);
+  text-transform: lowercase;
+}
+
+.dateLabel {
+  font-size: var(--font-size-base);
+  fill: var(--text-color);
+  font-weight: var(--font-weight-semibold);
+  user-select: none;
+  text-transform: uppercase;
+}
+
+.yearLabel {
+  font-size: var(--font-size-xs);
+  fill: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+.timeIndicators {
+  pointer-events: all;
+  transition: opacity 0.3s ease;
+}
+
+.timeIndicators:hover {
+  opacity: 1;
+}
+
+.timeIndicators:not(:hover) {
+  opacity: 0.85;
+}
+
+.timeLabel,
+.dateLabel {
+  transition: all 0.3s ease;
+}
+
+.timeIndicators:hover .timeLabel {
+  fill: var(--text-secondary);
+  font-weight: var(--font-weight-semibold);
+  opacity: 1;
+}
+
+.timeIndicators:hover .dateLabel {
+  fill: var(--text-color);
+  font-weight: var(--font-weight-semibold);
+  opacity: 1;
+}
+
 @media (max-width: 768px) {
-  .legend {
-    max-height: 30vh;
+  .timeLabel {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: -0.01em;
   }
 
-  .legendItem {
-    font-size: 0.75rem;
+  .dateLabel {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .yearLabel {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .timelineContent {
+    margin: 0.5rem 0;
+    padding-right: 0.5rem;
+  }
+
+  .timeIndicators {
+    transform: translateX(0);
+  }
+
+  .tooltip {
+    max-width: 250px;
+    padding: 0.75rem;
+  }
+
+  .tooltipValue {
+    font-size: var(--font-size-lg);
+  }
+
+  .tooltipTime {
+    font-size: var(--font-size-xs);
   }
 }
