@@ -218,29 +218,40 @@
 .tooltip {
   position: fixed;
   background: var(--background-color);
-  padding: 1rem;
-  border-radius: 0.75rem;
+  padding: 0.875rem 1rem;
+  border-radius: 0.5rem;
   box-shadow: 0 4px 20px var(--shadow-color), 0 1px 3px var(--shadow-color-darker);
-  border-left: 4px solid var(--primary-color);
+  border-left: 3px solid var(--primary-color);
   pointer-events: none;
   z-index: 3;
-  max-width: 300px;
-  font-size: 0.9375rem;
-  transform: translate(-50%, -100%);
-  margin-top: -1rem;
+  min-width: 180px;
+  max-width: 280px;
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  transition: all 0.15s ease-out;
+}
+
+.tooltip[style*="visibility: hidden"] {
+  position: fixed;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .tooltipValue {
   font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-xl);
-  line-height: 1.4;
+  font-size: var(--font-size-lg);
+  line-height: 1.2;
   color: var(--text-color);
+  white-space: nowrap;
+  margin-bottom: 0.25rem;
+  letter-spacing: -0.01em;
 }
 
 .tooltipTime {
-  margin-top: 0.375rem;
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .loadingContainer,
@@ -374,12 +385,13 @@
   }
 
   .tooltip {
-    max-width: 250px;
+    min-width: 160px;
+    max-width: 240px;
     padding: 0.75rem;
   }
 
   .tooltipValue {
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-base);
   }
 
   .tooltipTime {

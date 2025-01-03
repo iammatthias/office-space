@@ -137,6 +137,12 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
   const scrollRef = useRef<HTMLDivElement>(null);
   const dimensions = useResizeObserver(containerRef);
 
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.style.setProperty("--min-width", `${TIMELINE_CONFIG.minWidth}px`);
+    }
+  }, []);
+
   // Simplified data fetching with cursor-based pagination
   const fetchSensorData = useCallback(
     async (beforeDate?: Date, afterDate?: Date, isPreload = false) => {
@@ -433,9 +439,33 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
 
         if (closestPoint) {
           const typedClosestPoint = closestPoint as ClosestPoint;
+          const tooltipWidth = 180; // min-width from CSS
+          const tooltipHeight = 80; // approximate height based on content
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+
+          // Calculate tooltip position
+          let tooltipX = event.clientX + 10;
+          let tooltipY = event.clientY - tooltipHeight / 2;
+
+          // Check right edge
+          if (tooltipX + tooltipWidth > viewportWidth - 20) {
+            tooltipX = event.clientX - tooltipWidth - 10;
+          }
+
+          // Check bottom edge
+          if (tooltipY + tooltipHeight > viewportHeight - 20) {
+            tooltipY = viewportHeight - tooltipHeight - 20;
+          }
+
+          // Check top edge
+          if (tooltipY < 20) {
+            tooltipY = 20;
+          }
+
           setTooltip({
-            x: event.clientX,
-            y: event.clientY,
+            x: tooltipX,
+            y: tooltipY,
             value: typedClosestPoint.point.value,
             timestamp: typedClosestPoint.point.timestamp,
             sensorId: typedClosestPoint.sensorId,
@@ -473,192 +503,205 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
   }
 
   return (
-    <div ref={containerRef} style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <div className={`${styles.legend} ${isLegendExpanded ? styles.legendExpanded : ""}`}>
-        <div className={styles.legendHeader} onClick={() => setIsLegendExpanded(!isLegendExpanded)}>
-          <span className={styles.legendTitle}>Sensors</span>
-          <span className={styles.legendToggle}>{isLegendExpanded ? "−" : "+"}</span>
+    <div className={styles.scrollContainer} ref={containerRef}>
+      {isLoading && !data.length && (
+        <div className={styles.loadingContainer}>
+          <LoadingSpinner />
         </div>
-        <div className={styles.legendContent}>
-          {SENSOR_CONFIGS.map((config) => (
-            <div
-              key={config.sensorId}
-              className={`${styles.legendItem} ${hoveredSensor === config.sensorId ? styles.legendItemActive : ""}`}
-              onMouseEnter={() => {
-                setHoveredSensor(config.sensorId);
-                setHoveredGroup(SENSOR_CONFIGS.findIndex((c) => c.sensorId === config.sensorId));
-              }}
+      )}
+      <div className={styles.timelineContent}>
+        <div className={`${styles.legend} ${isLegendExpanded ? styles.legendExpanded : ""}`}>
+          <div className={styles.legendHeader} onClick={() => setIsLegendExpanded(!isLegendExpanded)}>
+            <span className={styles.legendTitle}>Sensors</span>
+            <span className={styles.legendToggle}>{isLegendExpanded ? "−" : "+"}</span>
+          </div>
+          <div className={styles.legendContent}>
+            {SENSOR_CONFIGS.map((config) => (
+              <div
+                key={config.sensorId}
+                className={`${styles.legendItem} ${hoveredSensor === config.sensorId ? styles.legendItemActive : ""}`}
+                onMouseEnter={() => {
+                  setHoveredSensor(config.sensorId);
+                  setHoveredGroup(SENSOR_CONFIGS.findIndex((c) => c.sensorId === config.sensorId));
+                }}
+                onMouseLeave={() => {
+                  setHoveredSensor(null);
+                  setHoveredGroup(null);
+                }}
+              >
+                <div className={styles.legendColor} style={{ backgroundColor: config.color }} />
+                <span>{config.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          ref={scrollRef}
+          className={styles.scrollContainer}
+          onScroll={(e) => {
+            const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+            debouncedScroll(scrollTop, scrollHeight, clientHeight);
+          }}
+        >
+          <div
+            className={styles.timelineContent}
+            style={{
+              height: `${
+                Math.max(...Object.values(data).map((points) => points.length - 1)) * TIMELINE_CONFIG.rowHeight + 30
+              }px`,
+              minWidth: `${TIMELINE_CONFIG.minWidth + TIMELINE_CONFIG.leftMargin + TIMELINE_CONFIG.rightMargin}px`,
+              paddingTop: `${TIMELINE_CONFIG.topMargin}px`,
+            }}
+          >
+            <svg
+              width='100%'
+              height='100%'
+              onMouseMove={handleMouseMove}
               onMouseLeave={() => {
+                setTooltip(null);
                 setHoveredSensor(null);
                 setHoveredGroup(null);
               }}
+              className={styles.timelineSvg}
             >
-              <div className={styles.legendColor} style={{ backgroundColor: config.color }} />
-              <span>{config.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+              {/* Time indicators */}
+              <g className={styles.timeIndicators}>
+                {Object.values(data)[0]?.map((point, i, arr) => {
+                  const showDate =
+                    i === 0 ||
+                    new Date(point.timestamp).toLocaleDateString() !==
+                      new Date(arr[i - 1].timestamp).toLocaleDateString();
 
-      <div
-        ref={scrollRef}
-        className={styles.scrollContainer}
-        onScroll={(e) => {
-          const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-          debouncedScroll(scrollTop, scrollHeight, clientHeight);
-        }}
-      >
-        <div
-          className={styles.timelineContent}
-          style={{
-            height: `${
-              Math.max(...Object.values(data).map((points) => points.length - 1)) * TIMELINE_CONFIG.rowHeight + 30
-            }px`,
-            minWidth: `${TIMELINE_CONFIG.minWidth + TIMELINE_CONFIG.leftMargin + TIMELINE_CONFIG.rightMargin}px`,
-            paddingTop: `${TIMELINE_CONFIG.topMargin}px`,
-          }}
-        >
-          <svg
-            width='100%'
-            height='100%'
-            onMouseMove={handleMouseMove}
-            onMouseLeave={() => {
-              setTooltip(null);
-              setHoveredSensor(null);
-              setHoveredGroup(null);
-            }}
-            className={styles.timelineSvg}
-          >
-            {/* Time indicators */}
-            <g className={styles.timeIndicators}>
-              {Object.values(data)[0]?.map((point, i, arr) => {
-                const showDate =
-                  i === 0 ||
-                  new Date(point.timestamp).toLocaleDateString() !==
-                    new Date(arr[i - 1].timestamp).toLocaleDateString();
+                  const yPos = i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin;
+                  const isMobile = window.innerWidth < 768;
+                  const leftMargin = isMobile ? TIMELINE_CONFIG.mobileLeftMargin : TIMELINE_CONFIG.leftMargin;
+                  const xOffset = leftMargin - TIMELINE_CONFIG.timeIndicatorOffset;
 
-                const yPos = i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin;
-                const isMobile = window.innerWidth < 768;
-                const leftMargin = isMobile ? TIMELINE_CONFIG.mobileLeftMargin : TIMELINE_CONFIG.leftMargin;
-                const xOffset = leftMargin - TIMELINE_CONFIG.timeIndicatorOffset;
+                  return (
+                    <g key={i}>
+                      {showDate && (
+                        <>
+                          <text
+                            x={xOffset}
+                            y={yPos - TIMELINE_CONFIG.dateOffset - (i === 0 ? 12 : 0)}
+                            className={`${styles.dateLabel} ${i === 0 ? styles.yearLabel : ""}`}
+                            textAnchor='end'
+                            dominantBaseline='middle'
+                          >
+                            {i === 0 && point.timestamp.getFullYear()}
+                          </text>
+                          <text
+                            x={xOffset}
+                            y={yPos - TIMELINE_CONFIG.dateOffset}
+                            className={styles.dateLabel}
+                            textAnchor='end'
+                            dominantBaseline='middle'
+                          >
+                            {point.timestamp
+                              .toLocaleDateString([], {
+                                month: "short",
+                                day: "numeric",
+                              })
+                              .replace(",", "")}
+                          </text>
+                        </>
+                      )}
+                      <text
+                        x={xOffset}
+                        y={yPos}
+                        className={styles.timeLabel}
+                        textAnchor='end'
+                        dominantBaseline='middle'
+                      >
+                        {point.timestamp
+                          .toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          })
+                          .replace(":00", "")
+                          .replace(" ", "")}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+
+              {SENSOR_CONFIGS.map((config, groupIndex) => {
+                const points = data[config.sensorId] || [];
+                if (points.length === 0) return null;
+
+                const normalizedPoints = getNormalizedData(points);
+                const isActive = hoveredGroup === null || hoveredGroup === groupIndex;
 
                 return (
-                  <g key={i}>
-                    {showDate && (
-                      <>
-                        <text
-                          x={xOffset}
-                          y={yPos - TIMELINE_CONFIG.dateOffset - (i === 0 ? 12 : 0)}
-                          className={`${styles.dateLabel} ${i === 0 ? styles.yearLabel : ""}`}
-                          textAnchor='end'
-                          dominantBaseline='middle'
-                        >
-                          {i === 0 && point.timestamp.getFullYear()}
-                        </text>
-                        <text
-                          x={xOffset}
-                          y={yPos - TIMELINE_CONFIG.dateOffset}
-                          className={styles.dateLabel}
-                          textAnchor='end'
-                          dominantBaseline='middle'
-                        >
-                          {point.timestamp
-                            .toLocaleDateString([], {
-                              month: "short",
-                              day: "numeric",
-                            })
-                            .replace(",", "")}
-                        </text>
-                      </>
-                    )}
-                    <text x={xOffset} y={yPos} className={styles.timeLabel} textAnchor='end' dominantBaseline='middle'>
-                      {point.timestamp
-                        .toLocaleTimeString([], {
-                          hour: "numeric",
-                          minute: "2-digit",
-                          hour12: true,
-                        })
-                        .replace(":00", "")
-                        .replace(" ", "")}
-                    </text>
-                  </g>
-                );
-              })}
-            </g>
-
-            {SENSOR_CONFIGS.map((config, groupIndex) => {
-              const points = data[config.sensorId] || [];
-              if (points.length === 0) return null;
-
-              const normalizedPoints = getNormalizedData(points);
-              const isActive = hoveredGroup === null || hoveredGroup === groupIndex;
-
-              return (
-                <g
-                  key={config.sensorId}
-                  className={styles.sensorGroup}
-                  onMouseEnter={() => {
-                    setHoveredGroup(groupIndex);
-                    setHoveredSensor(config.sensorId);
-                  }}
-                  onMouseLeave={() => {
-                    if (!tooltip) {
-                      setHoveredGroup(null);
-                      setHoveredSensor(null);
-                    }
-                  }}
-                >
-                  <path
-                    d={createLine(config.sensorId, normalizedPoints)}
-                    stroke={config.color}
-                    className={`${styles.sensorLine} ${isActive ? styles.sensorLineActive : ""}`}
+                  <g
+                    key={config.sensorId}
+                    className={styles.sensorGroup}
                     onMouseEnter={() => {
                       setHoveredGroup(groupIndex);
                       setHoveredSensor(config.sensorId);
                     }}
-                  />
-                  {normalizedPoints.map((point, i) => (
-                    <circle
-                      key={i}
-                      cx={scales[config.sensorId](point.normalizedValue || 0)}
-                      cy={i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin}
-                      r={isActive ? 4 : 3}
-                      className={`${styles.dataPoint} ${isActive ? styles.dataPointActive : ""}`}
-                      style={{ fill: config.color }}
+                    onMouseLeave={() => {
+                      if (!tooltip) {
+                        setHoveredGroup(null);
+                        setHoveredSensor(null);
+                      }
+                    }}
+                  >
+                    <path
+                      d={createLine(config.sensorId, normalizedPoints)}
+                      stroke={config.color}
+                      className={`${styles.sensorLine} ${isActive ? styles.sensorLineActive : ""}`}
                       onMouseEnter={() => {
                         setHoveredGroup(groupIndex);
                         setHoveredSensor(config.sensorId);
                       }}
                     />
-                  ))}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-      </div>
-
-      {tooltip && (
-        <div
-          className={styles.tooltip}
-          style={{
-            left: tooltip.x + 10,
-            top: tooltip.y + 10,
-            borderColor: tooltip.color,
-          }}
-        >
-          <div className={styles.tooltipValue} style={{ color: tooltip.color }}>
-            {tooltip.value.toFixed(2)} {tooltip.unit}
+                    {normalizedPoints.map((point, i) => (
+                      <circle
+                        key={i}
+                        cx={scales[config.sensorId](point.normalizedValue || 0)}
+                        cy={i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin}
+                        r={isActive ? 4 : 3}
+                        className={`${styles.dataPoint} ${isActive ? styles.dataPointActive : ""}`}
+                        style={{ fill: config.color }}
+                        onMouseEnter={() => {
+                          setHoveredGroup(groupIndex);
+                          setHoveredSensor(config.sensorId);
+                        }}
+                      />
+                    ))}
+                  </g>
+                );
+              })}
+            </svg>
           </div>
-          <div className={styles.tooltipTime}>{tooltip.timestamp.toLocaleString()}</div>
         </div>
-      )}
 
-      {isLoading && (
-        <div className={styles.loadingOverlay}>
-          <LoadingSpinner />
-        </div>
-      )}
+        {tooltip && (
+          <div
+            className={styles.tooltip}
+            style={{
+              left: tooltip.x,
+              top: tooltip.y,
+              borderColor: tooltip.color,
+            }}
+          >
+            <div className={styles.tooltipValue} style={{ color: tooltip.color }}>
+              {tooltip.value.toFixed(2)} {tooltip.unit}
+            </div>
+            <div className={styles.tooltipTime}>{tooltip.timestamp.toLocaleString()}</div>
+          </div>
+        )}
+
+        {isLoading && (
+          <div className={styles.loadingOverlay}>
+            <LoadingSpinner />
+          </div>
+        )}
+      </div>
     </div>
   );
 };
