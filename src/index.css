@@ -1,0 +1,46 @@
+:root {
+  font-family: monospace;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color: #213547;
+  background-color: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --background-color: #ffffff;
+  --border-color: #e9ecef;
+  --text-color: #6c757d;
+  --text-secondary: #6c757d;
+  --primary-color: #228be6;
+  --error-color: #fa5252;
+  --hover-background: #f8f9fa;
+}
+
+/* Add dark theme support if needed */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background-color: #1a1b1e;
+    --border-color: #2c2e33;
+    --text-color: #e9ecef;
+    --text-secondary: #adb5bd;
+    --hover-background: #2c2e33;
+  }
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body > #root {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
