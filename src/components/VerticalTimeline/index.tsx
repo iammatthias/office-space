@@ -371,6 +371,9 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
       let minLineDistance = Infinity;
 
       SENSOR_CONFIGS.forEach((config, groupIndex) => {
+        // Skip lines that aren't selected when there's a selection
+        if (selectedSensor && selectedSensor !== config.sensorId) return;
+
         const points = data[config.sensorId] || [];
         if (points.length === 0) return;
 
@@ -441,8 +444,8 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
 
         if (closestPoint) {
           const typedClosestPoint = closestPoint as ClosestPoint;
-          const tooltipWidth = 180; // min-width from CSS
-          const tooltipHeight = 80; // approximate height based on content
+          const tooltipWidth = 180;
+          const tooltipHeight = 80;
           const viewportWidth = window.innerWidth;
           const viewportHeight = window.innerHeight;
 
@@ -475,18 +478,24 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
             unit: typedClosestPoint.config.unit,
             name: typedClosestPoint.config.name,
           });
-          setHoveredSensor(typedClosestPoint.sensorId);
-          setHoveredGroup(typedClosestPoint.groupIndex);
+
+          // Only update hover states if no sensor is selected
+          if (!selectedSensor) {
+            setHoveredSensor(typedClosestPoint.sensorId);
+            setHoveredGroup(typedClosestPoint.groupIndex);
+          }
           return;
         }
       }
 
       // If we're here, we're not near any line
       setTooltip(null);
-      setHoveredSensor(null);
-      setHoveredGroup(null);
+      if (!selectedSensor) {
+        setHoveredSensor(null);
+        setHoveredGroup(null);
+      }
     },
-    [dimensions, scales, data, getNormalizedData]
+    [dimensions, scales, data, getNormalizedData, selectedSensor]
   );
 
   if (isLoading && Object.keys(data).length === 0) {
@@ -521,13 +530,17 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
               }`}
               onClick={() => {
                 if (selectedSensor === config.sensorId) {
+                  // Deselect current sensor
                   setSelectedSensor(null);
                   setHoveredSensor(null);
                   setHoveredGroup(null);
+                  setTooltip(null);
                 } else {
+                  // Select new sensor, clearing any previous selection
                   setSelectedSensor(config.sensorId);
                   setHoveredSensor(config.sensorId);
                   setHoveredGroup(SENSOR_CONFIGS.findIndex((c) => c.sensorId === config.sensorId));
+                  setTooltip(null); // Clear any existing tooltip
                 }
               }}
               onMouseEnter={() => {
