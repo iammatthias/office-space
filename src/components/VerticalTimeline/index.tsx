@@ -118,7 +118,6 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [dateRanges, setDateRanges] = useState<Record<string, { earliest: Date; latest: Date }>>({});
   const [isLegendExpanded, setIsLegendExpanded] = useState(false);
-  const [hoveredGroup, setHoveredGroup] = useState<number | null>(null);
   const [isPreloading, setIsPreloading] = useState(false);
   const [selectedSensor, setSelectedSensor] = useState<string | null>(null);
   const lastLoadTime = useRef<number>(0);
@@ -350,24 +349,21 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
 
   // Add handler for managing sensor selection
   const handleSensorSelection = useCallback(
-    (sensorId: string | null, groupIndex: number | null) => {
+    (sensorId: string | null) => {
       if (sensorId === null) {
         // Handle deselection
         setSelectedSensor(null);
         setHoveredSensor(null);
-        setHoveredGroup(null);
         setTooltip(null);
       } else if (sensorId === selectedSensor) {
         // Deselect if clicking the same sensor
         setSelectedSensor(null);
         setHoveredSensor(null);
-        setHoveredGroup(null);
         setTooltip(null);
       } else {
         // Select new sensor and update hover states
         setSelectedSensor(sensorId);
         setHoveredSensor(sensorId);
-        setHoveredGroup(groupIndex);
       }
     },
     [selectedSensor]
@@ -375,11 +371,10 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
 
   // Add handler for managing hover states
   const handleSensorHover = useCallback(
-    (sensorId: string | null, groupIndex: number | null) => {
-      // Update hover states if no selection or if hovering over selected sensor
-      if (!selectedSensor || selectedSensor === sensorId) {
+    (sensorId: string | null) => {
+      // Only update hover states if no sensor is selected
+      if (!selectedSensor) {
         setHoveredSensor(sensorId);
-        setHoveredGroup(groupIndex);
       }
     },
     [selectedSensor]
@@ -390,7 +385,6 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
     if (selectedSensor) {
       setSelectedSensor(null);
       setHoveredSensor(null);
-      setHoveredGroup(null);
       setTooltip(null);
     }
   }, [selectedSensor]);
@@ -402,9 +396,7 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
       let minLineDistance = Infinity;
 
       SENSOR_CONFIGS.forEach((config, groupIndex) => {
-        // If a sensor is selected, only consider that sensor
-        if (selectedSensor && selectedSensor !== config.sensorId) return;
-
+        // Remove the filter for selected sensor to allow finding any closest line
         const points = data[config.sensorId] || [];
         if (points.length === 0) return;
 
@@ -456,7 +448,7 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
 
       return null;
     },
-    [data, scales, getNormalizedData, selectedSensor]
+    [data, scales, getNormalizedData] // Remove selectedSensor from dependencies
   );
 
   // Update click handlers to use findClosestSensor
@@ -468,7 +460,7 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
 
       if (closest) {
         event.stopPropagation();
-        handleSensorSelection(closest.sensorId, closest.groupIndex);
+        handleSensorSelection(closest.sensorId);
       } else if (selectedSensor) {
         handleDeselect();
       }
@@ -486,7 +478,7 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
       const closest = findClosestSensor(mouseX, mouseY);
 
       if (closest) {
-        const { sensorId, groupIndex } = closest;
+        const { sensorId } = closest;
         const config = SENSOR_CONFIGS.find((c) => c.sensorId === sensorId);
         if (!config) return;
 
@@ -517,29 +509,30 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
             tooltipY = 20;
           }
 
-          setTooltip({
-            x: tooltipX,
-            y: tooltipY,
-            value: point.value,
-            timestamp: point.timestamp,
-            sensorId,
-            color: config.color,
-            unit: config.unit,
-            name: config.name,
-          });
-
-          // Update hover states if no selection or if hovering over selected sensor
+          // Only show tooltip if no sensor is selected or if hovering over the selected sensor
           if (!selectedSensor || selectedSensor === sensorId) {
-            setHoveredSensor(sensorId);
-            setHoveredGroup(groupIndex);
+            setTooltip({
+              x: tooltipX,
+              y: tooltipY,
+              value: point.value,
+              timestamp: point.timestamp,
+              sensorId,
+              color: config.color,
+              unit: config.unit,
+              name: config.name,
+            });
+
+            // Only update hover states if no sensor is selected
+            if (!selectedSensor) {
+              setHoveredSensor(sensorId);
+            }
           }
         }
       } else {
-        // Clear tooltip and hover states if not near any line
-        setTooltip(null);
+        // Clear tooltip and hover states if not near any line and no sensor is selected
         if (!selectedSensor) {
+          setTooltip(null);
           setHoveredSensor(null);
-          setHoveredGroup(null);
         }
       }
     },
@@ -590,19 +583,9 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
               className={`${styles.legendItem} ${
                 hoveredSensor === config.sensorId || selectedSensor === config.sensorId ? styles.legendItemActive : ""
               }`}
-              onClick={() =>
-                handleSensorSelection(
-                  config.sensorId,
-                  SENSOR_CONFIGS.findIndex((c) => c.sensorId === config.sensorId)
-                )
-              }
-              onMouseEnter={() =>
-                handleSensorHover(
-                  config.sensorId,
-                  SENSOR_CONFIGS.findIndex((c) => c.sensorId === config.sensorId)
-                )
-              }
-              onMouseLeave={() => handleSensorHover(null, null)}
+              onClick={() => handleSensorSelection(config.sensorId)}
+              onMouseEnter={() => handleSensorHover(config.sensorId)}
+              onMouseLeave={() => handleSensorHover(null)}
             >
               <div className={styles.legendColor} style={{ backgroundColor: config.color }} />
               <span>{config.name}</span>
@@ -645,7 +628,6 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
                   setTooltip(null);
                   if (!selectedSensor) {
                     setHoveredSensor(null);
-                    setHoveredGroup(null);
                   }
                 }}
                 className={styles.timelineSvg}
@@ -713,37 +695,37 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
                   })}
                 </g>
 
-                {SENSOR_CONFIGS.map((config, groupIndex) => {
+                {SENSOR_CONFIGS.map((config) => {
                   const points = data[config.sensorId] || [];
                   if (points.length === 0) return null;
 
                   const normalizedPoints = getNormalizedData(points);
                   const isActive = selectedSensor
                     ? selectedSensor === config.sensorId
-                    : hoveredGroup === null || hoveredGroup === groupIndex;
+                    : hoveredSensor === config.sensorId;
 
                   return (
                     <g
                       key={config.sensorId}
                       className={styles.sensorGroup}
-                      onMouseEnter={() => handleSensorHover(config.sensorId, groupIndex)}
-                      onMouseLeave={() => handleSensorHover(null, null)}
+                      onMouseEnter={() => handleSensorHover(config.sensorId)}
+                      onMouseLeave={() => handleSensorHover(null)}
                     >
                       <path
                         d={createLine(config.sensorId, normalizedPoints)}
                         stroke={config.color}
                         className={`${styles.sensorLine} ${isActive ? styles.sensorLineActive : ""}`}
-                        onMouseEnter={() => handleSensorHover(config.sensorId, groupIndex)}
+                        onMouseEnter={() => handleSensorHover(config.sensorId)}
                       />
                       {normalizedPoints.map((point, i) => (
                         <circle
                           key={i}
                           cx={scales[config.sensorId](point.normalizedValue || 0)}
                           cy={i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin}
-                          r={isActive ? 4 : 3}
+                          r={isActive ? 5 : hoveredSensor === config.sensorId ? 6 : 3}
                           className={`${styles.dataPoint} ${isActive ? styles.dataPointActive : ""}`}
                           style={{ fill: config.color }}
-                          onMouseEnter={() => handleSensorHover(config.sensorId, groupIndex)}
+                          onMouseEnter={() => handleSensorHover(config.sensorId)}
                         />
                       ))}
                     </g>

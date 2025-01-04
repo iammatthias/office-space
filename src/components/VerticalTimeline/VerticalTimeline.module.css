@@ -166,11 +166,13 @@
   top: 0;
   left: 0;
   pointer-events: all;
+  overflow: visible;
 }
 
 .sensorGroup {
   pointer-events: all;
   transition: all 0.3s ease;
+  isolation: isolate;
 }
 
 .sensorLine {
@@ -180,11 +182,14 @@
   transition: all 0.3s ease;
   pointer-events: all;
   cursor: pointer;
+  z-index: 1;
+  position: relative;
 }
 
 .sensorLineActive {
   opacity: 1;
   stroke-width: 2.25;
+  z-index: 2;
 }
 
 .dataPoint {
@@ -194,11 +199,18 @@
   transition: all 0.3s ease;
   cursor: pointer;
   pointer-events: all;
+  z-index: 1;
+  position: relative;
 }
 
 .dataPointActive {
   opacity: 1;
   stroke-width: 2.5;
+  z-index: 2;
+}
+
+.sensorGroup:hover {
+  z-index: 3;
 }
 
 .sensorGroup:hover .sensorLine,
@@ -206,15 +218,14 @@
   opacity: 1;
   stroke-width: 3;
   filter: drop-shadow(0 0 3px var(--shadow-color-darker));
+  z-index: 3;
 }
 
-.sensorGroup:hover .dataPoint circle,
-.dataPoint:hover circle {
+.sensorGroup:hover .dataPoint,
+.dataPoint:hover {
   opacity: 1;
   filter: drop-shadow(0 0 2px var(--shadow-color));
-  transform: scale(1.5);
-  transform-origin: center;
-  transition: all 0.3s ease;
+  z-index: 3;
 }
 
 .tooltip {
@@ -225,7 +236,7 @@
   box-shadow: 0 4px 20px var(--shadow-color), 0 1px 3px var(--shadow-color-darker);
   border-left: 3px solid var(--primary-color);
   pointer-events: none;
-  z-index: 3;
+  z-index: 10;
   min-width: 180px;
   max-width: 280px;
   backdrop-filter: blur(8px);
