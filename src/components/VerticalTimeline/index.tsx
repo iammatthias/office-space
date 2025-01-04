@@ -1,9 +1,8 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import * as d3 from "d3";
 import { supabase } from "../../lib/supabase";
 import useResizeObserver from "../../lib/useResizeObserver";
 import styles from "./VerticalTimeline.module.css";
-import { debounce } from "lodash";
 
 interface DataPoint {
   timestamp: Date;
@@ -49,7 +48,7 @@ interface ClosestLine {
 const TIMELINE_CONFIG = {
   rowHeight: 120,
   leftMargin: 64,
-  rightMargin: 40,
+  rightMargin: 16,
   minWidth: window.innerWidth < 768 ? 280 : 400,
   topMargin: 64,
   dateOffset: 24,
@@ -152,9 +151,6 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
   const dimensions = useResizeObserver(containerRef);
 
   // Add refs for top and bottom observers
-  const topObserverRef = useRef<IntersectionObserver | null>(null);
-  const bottomObserverRef = useRef<IntersectionObserver | null>(null);
-  const topTriggerRef = useRef<HTMLDivElement>(null);
   const bottomTriggerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -351,10 +347,6 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
       }
     };
   }, [data, isLoading, isPreloading, fetchSensorData]);
-
-  // Remove unused scroll handlers
-  const handleScroll = useCallback(() => {}, []);
-  const debouncedScroll = useMemo(() => debounce(handleScroll, 100), [handleScroll]);
 
   // D3 scale creation (memoized)
   const getScales = useCallback(() => {
