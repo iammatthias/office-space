@@ -59,35 +59,59 @@ const TIMELINE_CONFIG = {
   timeIndicatorOffset: 12,
 };
 
-const SENSOR_CONFIGS: SensorConfig[] = [
-  // Environmental sensors
-  { sensorId: "avg_temp", name: "Temperature", color: "#ff6b6b", unit: "°C" },
-  { sensorId: "avg_hum", name: "Humidity", color: "#4dabf7", unit: "%" },
-  { sensorId: "avg_pressure", name: "Pressure", color: "#51cf66", unit: "hPa" },
-  { sensorId: "avg_lux", name: "Light", color: "#ffd43b", unit: "lux" },
-  { sensorId: "avg_uv", name: "UV", color: "#845ef7", unit: "index" },
-  { sensorId: "avg_gas", name: "Gas", color: "#339af0", unit: "Ω" },
+const SENSOR_GROUPS = {
+  environmental: {
+    name: "Environmental",
+    sensors: [
+      { sensorId: "avg_temp", name: "Temperature", color: "#ff6b6b", unit: "°C", priority: 1 },
+      { sensorId: "avg_hum", name: "Humidity", color: "#4dabf7", unit: "%", priority: 1 },
+      { sensorId: "avg_pressure", name: "Pressure", color: "#51cf66", unit: "hPa", priority: 2 },
+      { sensorId: "avg_lux", name: "Light", color: "#ffd43b", unit: "lux", priority: 2 },
+      { sensorId: "avg_uv", name: "UV", color: "#845ef7", unit: "index", priority: 2 },
+      { sensorId: "avg_gas", name: "Gas", color: "#339af0", unit: "Ω", priority: 2 },
+    ],
+  },
+  motion: {
+    name: "Motion",
+    sensors: [
+      { sensorId: "avg_roll", name: "Roll", color: "#ff922b", unit: "°", priority: 2 },
+      { sensorId: "avg_pitch", name: "Pitch", color: "#20c997", unit: "°", priority: 2 },
+      { sensorId: "avg_yaw", name: "Yaw", color: "#f06595", unit: "°", priority: 2 },
+    ],
+  },
+  acceleration: {
+    name: "Acceleration",
+    sensors: [
+      { sensorId: "avg_accel_x", name: "X Axis", color: "#ae3ec9", unit: "mg", priority: 3 },
+      { sensorId: "avg_accel_y", name: "Y Axis", color: "#7950f2", unit: "mg", priority: 3 },
+      { sensorId: "avg_accel_z", name: "Z Axis", color: "#fd7e14", unit: "mg", priority: 3 },
+    ],
+  },
+  gyroscope: {
+    name: "Gyroscope",
+    sensors: [
+      { sensorId: "avg_gyro_x", name: "X Axis", color: "#12b886", unit: "°/s", priority: 3 },
+      { sensorId: "avg_gyro_y", name: "Y Axis", color: "#15aabf", unit: "°/s", priority: 3 },
+      { sensorId: "avg_gyro_z", name: "Z Axis", color: "#1c7ed6", unit: "°/s", priority: 3 },
+    ],
+  },
+  magnetometer: {
+    name: "Magnetometer",
+    sensors: [
+      { sensorId: "avg_mag_x", name: "X Axis", color: "#e64980", unit: "µT", priority: 3 },
+      { sensorId: "avg_mag_y", name: "Y Axis", color: "#f76707", unit: "µT", priority: 3 },
+      { sensorId: "avg_mag_z", name: "Z Axis", color: "#2b8a3e", unit: "µT", priority: 3 },
+    ],
+  },
+};
 
-  // Motion sensors
-  { sensorId: "avg_roll", name: "Roll", color: "#ff922b", unit: "°" },
-  { sensorId: "avg_pitch", name: "Pitch", color: "#20c997", unit: "°" },
-  { sensorId: "avg_yaw", name: "Yaw", color: "#f06595", unit: "°" },
-
-  // Accelerometer
-  { sensorId: "avg_accel_x", name: "Acceleration X", color: "#ae3ec9", unit: "mg" },
-  { sensorId: "avg_accel_y", name: "Acceleration Y", color: "#7950f2", unit: "mg" },
-  { sensorId: "avg_accel_z", name: "Acceleration Z", color: "#fd7e14", unit: "mg" },
-
-  // Gyroscope
-  { sensorId: "avg_gyro_x", name: "Gyroscope X", color: "#12b886", unit: "°/s" },
-  { sensorId: "avg_gyro_y", name: "Gyroscope Y", color: "#15aabf", unit: "°/s" },
-  { sensorId: "avg_gyro_z", name: "Gyroscope Z", color: "#1c7ed6", unit: "°/s" },
-
-  // Magnetometer
-  { sensorId: "avg_mag_x", name: "Magnetic X", color: "#e64980", unit: "µT" },
-  { sensorId: "avg_mag_y", name: "Magnetic Y", color: "#f76707", unit: "µT" },
-  { sensorId: "avg_mag_z", name: "Magnetic Z", color: "#2b8a3e", unit: "µT" },
-];
+// Replace SENSOR_CONFIGS with a flattened version for backward compatibility
+const SENSOR_CONFIGS = Object.values(SENSOR_GROUPS).flatMap((group) =>
+  group.sensors.map((sensor) => ({
+    ...sensor,
+    groupName: group.name,
+  }))
+);
 
 const LoadingSpinner = () => (
   <div className={styles.loadingSpinner}>
@@ -166,16 +190,22 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
 
         // Build the select string for all sensors
         const selectColumns = SENSOR_CONFIGS.map((config) => config.sensorId).join(",");
-        const query = supabase.from("hourly_aggregate").select(`hour,${selectColumns}`).limit(pageSize);
+        let query = supabase.from("hourly_aggregate").select(`hour,${selectColumns}`);
 
-        if (beforeDate) {
-          query.lt("hour", beforeDate.toISOString());
-        }
-        if (afterDate) {
-          query.gt("hour", afterDate.toISOString());
-        }
+        // For initial load, get the earliest records starting from January 1st
+        if (!hasExistingData) {
+          const startDate = new Date("2024-01-01T00:00:00Z");
+          query = query.gte("hour", startDate.toISOString()).order("hour", { ascending: true }).limit(pageSize);
+        } else {
+          query = query.limit(pageSize);
 
-        query.order("hour", { ascending: afterDate !== undefined });
+          if (beforeDate) {
+            query = query.lt("hour", beforeDate.toISOString()).order("hour", { ascending: false });
+          }
+          if (afterDate) {
+            query = query.gt("hour", afterDate.toISOString()).order("hour", { ascending: true });
+          }
+        }
 
         const { data: rawData, error: queryError } = await query;
 
@@ -577,18 +607,25 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
           <span className={styles.legendToggle}>{isLegendExpanded ? "−" : "+"}</span>
         </div>
         <div className={styles.legendContent}>
-          {SENSOR_CONFIGS.map((config) => (
-            <div
-              key={config.sensorId}
-              className={`${styles.legendItem} ${
-                hoveredSensor === config.sensorId || selectedSensor === config.sensorId ? styles.legendItemActive : ""
-              }`}
-              onClick={() => handleSensorSelection(config.sensorId)}
-              onMouseEnter={() => handleSensorHover(config.sensorId)}
-              onMouseLeave={() => handleSensorHover(null)}
-            >
-              <div className={styles.legendColor} style={{ backgroundColor: config.color }} />
-              <span>{config.name}</span>
+          {Object.entries(SENSOR_GROUPS).map(([groupId, group]) => (
+            <div key={groupId} className={styles.legendGroup}>
+              <div className={styles.legendGroupHeader}>{group.name}</div>
+              {group.sensors.map((config) => (
+                <div
+                  key={config.sensorId}
+                  className={`${styles.legendItem} ${
+                    hoveredSensor === config.sensorId || selectedSensor === config.sensorId
+                      ? styles.legendItemActive
+                      : ""
+                  }`}
+                  onClick={() => handleSensorSelection(config.sensorId)}
+                  onMouseEnter={() => handleSensorHover(config.sensorId)}
+                  onMouseLeave={() => handleSensorHover(null)}
+                >
+                  <div className={styles.legendColor} style={{ backgroundColor: config.color }} />
+                  <span>{config.name}</span>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -695,42 +732,52 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
                   })}
                 </g>
 
-                {SENSOR_CONFIGS.map((config) => {
-                  const points = data[config.sensorId] || [];
-                  if (points.length === 0) return null;
+                {Object.values(SENSOR_GROUPS).flatMap((group) =>
+                  group.sensors.map((config) => {
+                    const points = data[config.sensorId] || [];
+                    if (points.length === 0) return null;
 
-                  const normalizedPoints = getNormalizedData(points);
-                  const isActive = selectedSensor
-                    ? selectedSensor === config.sensorId
-                    : hoveredSensor === config.sensorId;
+                    const normalizedPoints = getNormalizedData(points);
+                    const isActive = selectedSensor
+                      ? selectedSensor === config.sensorId
+                      : hoveredSensor === config.sensorId;
 
-                  return (
-                    <g
-                      key={config.sensorId}
-                      className={styles.sensorGroup}
-                      onMouseEnter={() => handleSensorHover(config.sensorId)}
-                      onMouseLeave={() => handleSensorHover(null)}
-                    >
-                      <path
-                        d={createLine(config.sensorId, normalizedPoints)}
-                        stroke={config.color}
-                        className={`${styles.sensorLine} ${isActive ? styles.sensorLineActive : ""}`}
+                    // Adjust opacity based on priority when not active
+                    const baseOpacity = isActive ? 1 : Math.max(0.1, 1 - config.priority * 0.25);
+
+                    return (
+                      <g
+                        key={config.sensorId}
+                        className={styles.sensorGroup}
                         onMouseEnter={() => handleSensorHover(config.sensorId)}
-                      />
-                      {normalizedPoints.map((point, i) => (
-                        <circle
-                          key={i}
-                          cx={scales[config.sensorId](point.normalizedValue || 0)}
-                          cy={i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin}
-                          r={isActive ? 5 : hoveredSensor === config.sensorId ? 6 : 3}
-                          className={`${styles.dataPoint} ${isActive ? styles.dataPointActive : ""}`}
-                          style={{ fill: config.color }}
+                        onMouseLeave={() => handleSensorHover(null)}
+                      >
+                        <path
+                          d={createLine(config.sensorId, normalizedPoints)}
+                          stroke={config.color}
+                          style={{ opacity: baseOpacity }}
+                          className={`${styles.sensorLine} ${isActive ? styles.sensorLineActive : ""}`}
                           onMouseEnter={() => handleSensorHover(config.sensorId)}
                         />
-                      ))}
-                    </g>
-                  );
-                })}
+                        {(isActive || config.priority === 1) &&
+                          normalizedPoints.map((point, i) => (
+                            <circle
+                              key={i}
+                              cx={scales[config.sensorId](point.normalizedValue || 0)}
+                              cy={i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin}
+                              r={isActive ? 5 : 3}
+                              style={{
+                                fill: config.color,
+                                opacity: baseOpacity,
+                              }}
+                              className={`${styles.dataPoint} ${isActive ? styles.dataPointActive : ""}`}
+                              onMouseEnter={() => handleSensorHover(config.sensorId)}
+                            />
+                          ))}
+                      </g>
+                    );
+                  })
+                )}
               </svg>
             </div>
           </div>
