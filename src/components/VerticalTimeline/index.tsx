@@ -47,16 +47,6 @@ interface ClosestLine {
   groupIndex: number;
 }
 
-interface ClosestPoint {
-  distance: number;
-  point: DataPoint;
-  sensorId: string;
-  config: SensorConfig;
-  x: number;
-  y: number;
-  groupIndex: number;
-}
-
 const TIMELINE_CONFIG = {
   rowHeight: 120,
   leftMargin: 64,
@@ -358,20 +348,61 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
     [scales]
   );
 
-  // Enhanced mouse interaction handling
-  const handleMouseMove = useCallback(
-    (event: React.MouseEvent<SVGSVGElement>) => {
-      if (!dimensions) return;
+  // Add handler for managing sensor selection
+  const handleSensorSelection = useCallback(
+    (sensorId: string | null, groupIndex: number | null) => {
+      if (sensorId === null) {
+        // Handle deselection
+        setSelectedSensor(null);
+        setHoveredSensor(null);
+        setHoveredGroup(null);
+        setTooltip(null);
+      } else if (sensorId === selectedSensor) {
+        // Deselect if clicking the same sensor
+        setSelectedSensor(null);
+        setHoveredSensor(null);
+        setHoveredGroup(null);
+        setTooltip(null);
+      } else {
+        // Select new sensor and update hover states
+        setSelectedSensor(sensorId);
+        setHoveredSensor(sensorId);
+        setHoveredGroup(groupIndex);
+      }
+    },
+    [selectedSensor]
+  );
 
-      const svgElement = event.currentTarget;
-      const [mouseX, mouseY] = d3.pointer(event, svgElement);
+  // Add handler for managing hover states
+  const handleSensorHover = useCallback(
+    (sensorId: string | null, groupIndex: number | null) => {
+      // Update hover states if no selection or if hovering over selected sensor
+      if (!selectedSensor || selectedSensor === sensorId) {
+        setHoveredSensor(sensorId);
+        setHoveredGroup(groupIndex);
+      }
+    },
+    [selectedSensor]
+  );
 
-      // First, find the closest line
+  // Add handler for deselection
+  const handleDeselect = useCallback(() => {
+    if (selectedSensor) {
+      setSelectedSensor(null);
+      setHoveredSensor(null);
+      setHoveredGroup(null);
+      setTooltip(null);
+    }
+  }, [selectedSensor]);
+
+  // Add helper function to find closest sensor
+  const findClosestSensor = useCallback(
+    (mouseX: number, mouseY: number): { sensorId: string; groupIndex: number } | null => {
       let closestLine: ClosestLine | null = null;
       let minLineDistance = Infinity;
 
       SENSOR_CONFIGS.forEach((config, groupIndex) => {
-        // Skip lines that aren't selected when there's a selection
+        // If a sensor is selected, only consider that sensor
         if (selectedSensor && selectedSensor !== config.sensorId) return;
 
         const points = data[config.sensorId] || [];
@@ -408,62 +439,80 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
 
         if (distance < minLineDistance) {
           minLineDistance = distance;
-          closestLine = { distance, config, groupIndex };
+          closestLine = {
+            distance,
+            config,
+            groupIndex,
+          } satisfies ClosestLine;
         }
       });
 
-      // If we found a close enough line, find the closest point on that line
       if (closestLine && (closestLine as ClosestLine).distance < 50) {
-        const { config, groupIndex } = closestLine as ClosestLine;
-        const points = data[config.sensorId] || [];
+        return {
+          sensorId: (closestLine as ClosestLine).config.sensorId,
+          groupIndex: (closestLine as ClosestLine).groupIndex,
+        };
+      }
+
+      return null;
+    },
+    [data, scales, getNormalizedData, selectedSensor]
+  );
+
+  // Update click handlers to use findClosestSensor
+  const handleSvgClick = useCallback(
+    (event: React.MouseEvent<SVGElement>) => {
+      const svgElement = event.currentTarget;
+      const [mouseX, mouseY] = d3.pointer(event, svgElement);
+      const closest = findClosestSensor(mouseX, mouseY);
+
+      if (closest) {
+        event.stopPropagation();
+        handleSensorSelection(closest.sensorId, closest.groupIndex);
+      } else if (selectedSensor) {
+        handleDeselect();
+      }
+    },
+    [findClosestSensor, handleSensorSelection, handleDeselect, selectedSensor]
+  );
+
+  // Update handleMouseMove to use findClosestSensor
+  const handleMouseMove = useCallback(
+    (event: React.MouseEvent<SVGSVGElement>) => {
+      if (!dimensions) return;
+
+      const svgElement = event.currentTarget;
+      const [mouseX, mouseY] = d3.pointer(event, svgElement);
+      const closest = findClosestSensor(mouseX, mouseY);
+
+      if (closest) {
+        const { sensorId, groupIndex } = closest;
+        const config = SENSOR_CONFIGS.find((c) => c.sensorId === sensorId);
+        if (!config) return;
+
+        const points = data[sensorId] || [];
         const normalizedPoints: DataPoint[] = getNormalizedData(points);
-        const scale = scales[config.sensorId];
+        const scale = scales[sensorId];
         if (!scale || normalizedPoints.length === 0) return;
 
-        let closestPoint: ClosestPoint | null = null;
-        let minPointDistance = Infinity;
-
-        normalizedPoints.forEach((point, i) => {
-          const x = scale(point.normalizedValue || 0);
-          const y = i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin;
-          const distance = Math.sqrt((x - mouseX) ** 2 + (y - mouseY) ** 2);
-
-          if (distance < minPointDistance) {
-            minPointDistance = distance;
-            closestPoint = {
-              distance,
-              point,
-              sensorId: config.sensorId,
-              config,
-              x,
-              y,
-              groupIndex,
-            };
-          }
-        });
-
-        if (closestPoint) {
-          const typedClosestPoint = closestPoint as ClosestPoint;
+        // Find closest point for tooltip
+        const mouseIndex = Math.floor((mouseY - TIMELINE_CONFIG.topMargin) / TIMELINE_CONFIG.rowHeight);
+        if (mouseIndex >= 0 && mouseIndex < normalizedPoints.length) {
+          const point = normalizedPoints[mouseIndex];
           const tooltipWidth = 180;
           const tooltipHeight = 80;
           const viewportWidth = window.innerWidth;
           const viewportHeight = window.innerHeight;
 
-          // Calculate tooltip position
           let tooltipX = event.clientX + 10;
           let tooltipY = event.clientY - tooltipHeight / 2;
 
-          // Check right edge
           if (tooltipX + tooltipWidth > viewportWidth - 20) {
             tooltipX = event.clientX - tooltipWidth - 10;
           }
-
-          // Check bottom edge
           if (tooltipY + tooltipHeight > viewportHeight - 20) {
             tooltipY = viewportHeight - tooltipHeight - 20;
           }
-
-          // Check top edge
           if (tooltipY < 20) {
             tooltipY = 20;
           }
@@ -471,32 +520,45 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
           setTooltip({
             x: tooltipX,
             y: tooltipY,
-            value: typedClosestPoint.point.value,
-            timestamp: typedClosestPoint.point.timestamp,
-            sensorId: typedClosestPoint.sensorId,
-            color: typedClosestPoint.config.color,
-            unit: typedClosestPoint.config.unit,
-            name: typedClosestPoint.config.name,
+            value: point.value,
+            timestamp: point.timestamp,
+            sensorId,
+            color: config.color,
+            unit: config.unit,
+            name: config.name,
           });
 
-          // Only update hover states if no sensor is selected
-          if (!selectedSensor) {
-            setHoveredSensor(typedClosestPoint.sensorId);
-            setHoveredGroup(typedClosestPoint.groupIndex);
+          // Update hover states if no selection or if hovering over selected sensor
+          if (!selectedSensor || selectedSensor === sensorId) {
+            setHoveredSensor(sensorId);
+            setHoveredGroup(groupIndex);
           }
-          return;
+        }
+      } else {
+        // Clear tooltip and hover states if not near any line
+        setTooltip(null);
+        if (!selectedSensor) {
+          setHoveredSensor(null);
+          setHoveredGroup(null);
         }
       }
-
-      // If we're here, we're not near any line
-      setTooltip(null);
-      if (!selectedSensor) {
-        setHoveredSensor(null);
-        setHoveredGroup(null);
-      }
     },
-    [dimensions, scales, data, getNormalizedData, selectedSensor]
+    [dimensions, scales, data, getNormalizedData, selectedSensor, findClosestSensor]
   );
+
+  // Add effect to handle clicks outside the component
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (selectedSensor && containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        handleDeselect();
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [selectedSensor, handleDeselect]);
 
   if (isLoading && Object.keys(data).length === 0) {
     return (
@@ -528,33 +590,19 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
               className={`${styles.legendItem} ${
                 hoveredSensor === config.sensorId || selectedSensor === config.sensorId ? styles.legendItemActive : ""
               }`}
-              onClick={() => {
-                if (selectedSensor === config.sensorId) {
-                  // Deselect current sensor
-                  setSelectedSensor(null);
-                  setHoveredSensor(null);
-                  setHoveredGroup(null);
-                  setTooltip(null);
-                } else {
-                  // Select new sensor, clearing any previous selection
-                  setSelectedSensor(config.sensorId);
-                  setHoveredSensor(config.sensorId);
-                  setHoveredGroup(SENSOR_CONFIGS.findIndex((c) => c.sensorId === config.sensorId));
-                  setTooltip(null); // Clear any existing tooltip
-                }
-              }}
-              onMouseEnter={() => {
-                if (!selectedSensor) {
-                  setHoveredSensor(config.sensorId);
-                  setHoveredGroup(SENSOR_CONFIGS.findIndex((c) => c.sensorId === config.sensorId));
-                }
-              }}
-              onMouseLeave={() => {
-                if (!selectedSensor) {
-                  setHoveredSensor(null);
-                  setHoveredGroup(null);
-                }
-              }}
+              onClick={() =>
+                handleSensorSelection(
+                  config.sensorId,
+                  SENSOR_CONFIGS.findIndex((c) => c.sensorId === config.sensorId)
+                )
+              }
+              onMouseEnter={() =>
+                handleSensorHover(
+                  config.sensorId,
+                  SENSOR_CONFIGS.findIndex((c) => c.sensorId === config.sensorId)
+                )
+              }
+              onMouseLeave={() => handleSensorHover(null, null)}
             >
               <div className={styles.legendColor} style={{ backgroundColor: config.color }} />
               <span>{config.name}</span>
@@ -562,7 +610,8 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
           ))}
         </div>
       </div>
-      <div className={styles.scrollContainer} ref={containerRef}>
+
+      <div className={styles.scrollContainer} ref={containerRef} onClick={handleDeselect}>
         {isLoading && !data.length && (
           <div className={styles.loadingContainer}>
             <LoadingSpinner />
@@ -591,10 +640,13 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
                 width='100%'
                 height='100%'
                 onMouseMove={handleMouseMove}
+                onClick={handleSvgClick}
                 onMouseLeave={() => {
                   setTooltip(null);
-                  setHoveredSensor(null);
-                  setHoveredGroup(null);
+                  if (!selectedSensor) {
+                    setHoveredSensor(null);
+                    setHoveredGroup(null);
+                  }
                 }}
                 className={styles.timelineSvg}
               >
@@ -674,29 +726,14 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
                     <g
                       key={config.sensorId}
                       className={styles.sensorGroup}
-                      onMouseEnter={() => {
-                        if (!selectedSensor) {
-                          setHoveredGroup(groupIndex);
-                          setHoveredSensor(config.sensorId);
-                        }
-                      }}
-                      onMouseLeave={() => {
-                        if (!selectedSensor && !tooltip) {
-                          setHoveredGroup(null);
-                          setHoveredSensor(null);
-                        }
-                      }}
+                      onMouseEnter={() => handleSensorHover(config.sensorId, groupIndex)}
+                      onMouseLeave={() => handleSensorHover(null, null)}
                     >
                       <path
                         d={createLine(config.sensorId, normalizedPoints)}
                         stroke={config.color}
                         className={`${styles.sensorLine} ${isActive ? styles.sensorLineActive : ""}`}
-                        onMouseEnter={() => {
-                          if (!selectedSensor) {
-                            setHoveredGroup(groupIndex);
-                            setHoveredSensor(config.sensorId);
-                          }
-                        }}
+                        onMouseEnter={() => handleSensorHover(config.sensorId, groupIndex)}
                       />
                       {normalizedPoints.map((point, i) => (
                         <circle
@@ -706,12 +743,7 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
                           r={isActive ? 4 : 3}
                           className={`${styles.dataPoint} ${isActive ? styles.dataPointActive : ""}`}
                           style={{ fill: config.color }}
-                          onMouseEnter={() => {
-                            if (!selectedSensor) {
-                              setHoveredGroup(groupIndex);
-                              setHoveredSensor(config.sensorId);
-                            }
-                          }}
+                          onMouseEnter={() => handleSensorHover(config.sensorId, groupIndex)}
                         />
                       ))}
                     </g>
