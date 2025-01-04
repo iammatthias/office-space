@@ -14,7 +14,6 @@ interface DataPoint {
 
 interface TimelineProps {
   pageSize?: number;
-  preloadThreshold?: number; // pixels from boundary to trigger preload
   loadingBuffer?: number; // minimum ms between load requests
 }
 
@@ -133,7 +132,7 @@ const normalizeValue = (value: number, minVal: number, maxVal: number): number =
  * - Dynamic data normalization
  * - Responsive layout
  */
-export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadingBuffer = 1000 }: TimelineProps) => {
+export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: TimelineProps) => {
   // State management
   const [data, setData] = useState<Record<string, DataPoint[]>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -152,6 +151,12 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
   const scrollRef = useRef<HTMLDivElement>(null);
   const dimensions = useResizeObserver(containerRef);
 
+  // Add refs for top and bottom observers
+  const topObserverRef = useRef<IntersectionObserver | null>(null);
+  const bottomObserverRef = useRef<IntersectionObserver | null>(null);
+  const topTriggerRef = useRef<HTMLDivElement>(null);
+  const bottomTriggerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.style.setProperty("--min-width", `${TIMELINE_CONFIG.minWidth}px`);
@@ -160,103 +165,131 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
 
   // Simplified data fetching with cursor-based pagination
   const fetchSensorData = useCallback(
-    async (beforeDate?: Date, afterDate?: Date, isPreload = false) => {
+    async (afterDate?: Date, isPreload = false) => {
       try {
-        // Implement loading buffer to prevent too frequent requests
+        console.log("=== fetchSensorData called ===");
+        console.log("afterDate:", afterDate?.toISOString());
+        console.log("isPreload:", isPreload);
+        console.log("Current data length:", Object.values(data)[0]?.length || 0);
+
+        if (!isPreload) {
+          setIsLoading(true);
+        } else {
+          setIsPreloading(true);
+        }
+
         const now = Date.now();
         if (now - lastLoadTime.current < loadingBuffer && !isPreload) {
+          console.log("Skipping fetch due to buffer time");
           return;
         }
         lastLoadTime.current = now;
 
-        // Check if we already have data for this range
-        const hasExistingData = Object.keys(dateRanges).length > 0;
-        if (hasExistingData) {
-          const ranges = Object.values(dateRanges);
-          const earliest = new Date(Math.min(...ranges.map((r) => r.earliest.getTime())));
-          const latest = new Date(Math.max(...ranges.map((r) => r.latest.getTime())));
-
-          if (beforeDate && beforeDate >= earliest) return;
-          if (afterDate && afterDate <= latest) return;
-        }
-
-        // Only set loading if we don't have any data yet or if it's not a preload
-        if (!hasExistingData || !isPreload) {
-          setIsLoading(true);
-        }
-        if (isPreload) {
-          setIsPreloading(true);
-        }
-
-        // Build the select string for all sensors
         const selectColumns = SENSOR_CONFIGS.map((config) => config.sensorId).join(",");
         let query = supabase.from("hourly_aggregate").select(`hour,${selectColumns}`);
 
-        // For initial load, get the earliest records starting from January 1st
-        if (!hasExistingData) {
-          const startDate = new Date("2024-01-01T00:00:00Z");
-          query = query.gte("hour", startDate.toISOString()).order("hour", { ascending: true }).limit(pageSize);
-        } else {
-          query = query.limit(pageSize);
-
-          if (beforeDate) {
-            query = query.lt("hour", beforeDate.toISOString()).order("hour", { ascending: false });
-          }
-          if (afterDate) {
-            query = query.gt("hour", afterDate.toISOString()).order("hour", { ascending: true });
-          }
+        // Initial load gets oldest data first
+        if (!Object.keys(dateRanges).length) {
+          console.log("Initial load - getting first page");
+          query = query.order("hour", { ascending: true }).limit(pageSize);
+        } else if (afterDate) {
+          console.log("Loading next page after:", afterDate.toISOString());
+          // Get newer data (scrolling down)
+          query = query.gt("hour", afterDate.toISOString()).order("hour", { ascending: true }).limit(pageSize);
         }
 
         const { data: rawData, error: queryError } = await query;
 
         if (queryError) throw new Error(queryError.message);
-        if (!rawData || rawData.length === 0) return;
+        if (!rawData || rawData.length === 0) {
+          console.log("No more data to load");
+          return;
+        }
 
-        // Transform the data for each sensor
+        const typedRawData = rawData as unknown as RawDataRow[];
+        console.log(`Fetched ${typedRawData.length} new records`);
+        console.log("First record timestamp:", typedRawData[0].hour);
+        console.log("Last record timestamp:", typedRawData[typedRawData.length - 1].hour);
+
         const transformedData: Record<string, DataPoint[]> = {};
-        const timestamps = (rawData as unknown as RawDataRow[]).map((row) => new Date(row.hour));
+        const timestamps = typedRawData.map((row) => new Date(row.hour));
         const newEarliest = Math.min(...timestamps.map((d) => d.getTime()));
         const newLatest = Math.max(...timestamps.map((d) => d.getTime()));
 
         SENSOR_CONFIGS.forEach((config) => {
-          transformedData[config.sensorId] = (rawData as unknown as RawDataRow[]).map((row) => ({
+          transformedData[config.sensorId] = typedRawData.map((row) => ({
             timestamp: new Date(row.hour),
             value: Number(row[config.sensorId]),
             sensorId: config.sensorId,
           }));
         });
 
-        // Update date ranges for all sensors
         setDateRanges((prev) => {
           const newRanges = { ...prev };
           SENSOR_CONFIGS.forEach((config) => {
-            newRanges[config.sensorId] = {
-              earliest: prev[config.sensorId]
-                ? new Date(Math.min(prev[config.sensorId].earliest.getTime(), newEarliest))
-                : new Date(newEarliest),
-              latest: prev[config.sensorId]
-                ? new Date(Math.max(prev[config.sensorId].latest.getTime(), newLatest))
-                : new Date(newLatest),
-            };
+            if (!newRanges[config.sensorId]) {
+              newRanges[config.sensorId] = {
+                earliest: new Date(newEarliest),
+                latest: new Date(newLatest),
+              };
+            } else if (afterDate) {
+              const newLatestDate = new Date(Math.max(newLatest, prev[config.sensorId].latest.getTime()));
+              console.log("Updating date range for", config.sensorId, "new latest:", newLatestDate.toISOString());
+              newRanges[config.sensorId].latest = newLatestDate;
+            }
           });
           return newRanges;
         });
 
-        // Merge and deduplicate data for all sensors
         setData((prev) => {
           const newData = { ...prev };
           SENSOR_CONFIGS.forEach((config) => {
             const existingData = prev[config.sensorId] || [];
-            const mergedData = [...existingData, ...transformedData[config.sensorId]];
+            const newSensorData = transformedData[config.sensorId];
 
-            // Deduplicate based on timestamp and sort in ascending order
-            newData[config.sensorId] = Array.from(
-              new Map(mergedData.map((item) => [item.timestamp.getTime(), item])).values()
-            ).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+            console.log(`Processing ${config.sensorId}:`);
+            console.log("- Existing data points:", existingData.length);
+            console.log("- New data points:", newSensorData.length);
+
+            // Create a Map using timestamp as key to ensure uniqueness
+            const dataMap = new Map(existingData.map((point) => [point.timestamp.getTime(), point]));
+
+            // Add new data points
+            let newPointsAdded = 0;
+            newSensorData.forEach((point) => {
+              const timestamp = point.timestamp.getTime();
+              if (!dataMap.has(timestamp)) {
+                dataMap.set(timestamp, point);
+                newPointsAdded++;
+              }
+            });
+
+            console.log(`- Actually added ${newPointsAdded} new points`);
+            console.log("- Total points after merge:", dataMap.size);
+
+            // Convert back to array and sort by timestamp
+            newData[config.sensorId] = Array.from(dataMap.values()).sort(
+              (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+            );
           });
           return newData;
         });
+
+        // Only setup preload if we actually got new data
+        if (typedRawData.length === pageSize && !isPreload) {
+          const latestTimestamp = new Date(Math.max(...timestamps.map((d) => d.getTime())));
+          console.log("Setting up preload for next page after:", latestTimestamp.toISOString());
+
+          if (preloadTimer.current) {
+            clearTimeout(preloadTimer.current);
+          }
+
+          preloadTimer.current = setTimeout(() => {
+            fetchSensorData(latestTimestamp, true);
+          }, 100);
+        }
       } catch (err) {
+        console.error("Error fetching data:", err);
         setError(err instanceof Error ? err.message : "Failed to fetch data");
       } finally {
         if (isPreload) {
@@ -264,9 +297,10 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
         } else {
           setIsLoading(false);
         }
+        console.log("=== fetchSensorData completed ===");
       }
     },
-    [pageSize, dateRanges, loadingBuffer]
+    [pageSize, loadingBuffer, data, dateRanges] // Added data and dateRanges to dependencies
   );
 
   // Initial data load
@@ -274,56 +308,53 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
     fetchSensorData();
   }, [fetchSensorData]);
 
-  // Enhanced scroll handling with preloading
-  const handleScroll = useCallback(
-    (scrollTop: number, scrollHeight: number, clientHeight: number) => {
-      // Clear any existing preload timer
-      if (preloadTimer.current) {
-        clearTimeout(preloadTimer.current);
-      }
+  // Setup intersection observer for bottom loading
+  useEffect(() => {
+    let observer: IntersectionObserver | null = null;
 
-      const isNearTop = scrollTop < preloadThreshold;
-      const isNearBottom = scrollHeight - (scrollTop + clientHeight) < preloadThreshold;
+    const loadData = () => {
       const sensorData = Object.values(data)[0] || [];
-
       if (sensorData.length === 0) return;
 
-      // Function to handle actual data loading
-      const loadData = (isPreload = false) => {
-        if (isNearTop) {
-          const newestDate = sensorData[sensorData.length - 1].timestamp;
-          fetchSensorData(undefined, newestDate, isPreload);
-        } else if (isNearBottom) {
-          const oldestDate = sensorData[0].timestamp;
-          fetchSensorData(oldestDate, undefined, isPreload);
-        }
-      };
+      const newestDate = sensorData[sensorData.length - 1].timestamp;
+      console.log("Intersection observer triggering load after:", newestDate.toISOString());
+      fetchSensorData(newestDate, false);
+    };
 
-      if (isNearTop || isNearBottom) {
-        // If very close to boundary, load immediately
-        if (scrollTop < 100 || scrollHeight - (scrollTop + clientHeight) < 100) {
-          loadData(false);
-        } else {
-          // Otherwise, preload after a short delay
-          preloadTimer.current = setTimeout(() => {
-            if (!isLoading && !isPreloading) {
-              loadData(true);
-            }
-          }, 150);
+    const bottomObserverCallback: IntersectionObserverCallback = (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && !isLoading && !isPreloading) {
+          console.log("Intersection observer triggered");
+          loadData();
         }
+      });
+    };
+
+    // Create observer with options optimized for scroll detection
+    observer = new IntersectionObserver(bottomObserverCallback, {
+      root: null,
+      threshold: 0,
+      rootMargin: "0px 0px 50px 0px",
+    });
+
+    // Ensure the trigger element exists before observing
+    const triggerElement = bottomTriggerRef.current;
+    if (triggerElement) {
+      observer.observe(triggerElement);
+      console.log("Observer attached to trigger element");
+    }
+
+    // Cleanup function
+    return () => {
+      if (observer) {
+        observer.disconnect();
       }
-    },
-    [data, fetchSensorData, isLoading, isPreloading, preloadThreshold]
-  );
+    };
+  }, [data, isLoading, isPreloading, fetchSensorData]);
 
-  // Debounced scroll handler
-  const debouncedScroll = useMemo(
-    () =>
-      debounce((scrollTop: number, scrollHeight: number, clientHeight: number) => {
-        handleScroll(scrollTop, scrollHeight, clientHeight);
-      }, 100),
-    [handleScroll]
-  );
+  // Remove unused scroll handlers
+  const handleScroll = useCallback(() => {}, []);
+  const debouncedScroll = useMemo(() => debounce(handleScroll, 100), [handleScroll]);
 
   // D3 scale creation (memoized)
   const getScales = useCallback(() => {
@@ -631,182 +662,176 @@ export const VerticalTimeline = ({ pageSize = 24, preloadThreshold = 400, loadin
         </div>
       </div>
 
-      <div className={styles.scrollContainer} ref={containerRef} onClick={handleDeselect}>
-        {isLoading && !data.length && (
+      <div className={styles.scrollContainer} ref={scrollRef}>
+        {isLoading && Object.keys(data).length === 0 && (
           <div className={styles.loadingContainer}>
             <LoadingSpinner />
           </div>
         )}
-        <div className={styles.timelineContent}>
+        <div className={styles.scrollContent} ref={containerRef}>
           <div
-            ref={scrollRef}
-            className={styles.scrollContainer}
-            onScroll={(e) => {
-              const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
-              debouncedScroll(scrollTop, scrollHeight, clientHeight);
+            className={styles.timelineContent}
+            style={{
+              height: `${
+                Math.max(...Object.values(data).map((points) => points.length - 1)) * TIMELINE_CONFIG.rowHeight +
+                TIMELINE_CONFIG.topMargin
+              }px`,
+              minWidth: `${TIMELINE_CONFIG.minWidth + TIMELINE_CONFIG.leftMargin + TIMELINE_CONFIG.rightMargin}px`,
+              paddingTop: `${TIMELINE_CONFIG.topMargin}px`,
+              position: "relative",
             }}
           >
-            <div
-              className={styles.timelineContent}
-              style={{
-                height: `${
-                  Math.max(...Object.values(data).map((points) => points.length - 1)) * TIMELINE_CONFIG.rowHeight + 30
-                }px`,
-                minWidth: `${TIMELINE_CONFIG.minWidth + TIMELINE_CONFIG.leftMargin + TIMELINE_CONFIG.rightMargin}px`,
-                paddingTop: `${TIMELINE_CONFIG.topMargin}px`,
+            <svg
+              width='100%'
+              height='100%'
+              onMouseMove={handleMouseMove}
+              onClick={handleSvgClick}
+              onMouseLeave={() => {
+                setTooltip(null);
+                if (!selectedSensor) {
+                  setHoveredSensor(null);
+                }
               }}
+              className={styles.timelineSvg}
             >
-              <svg
-                width='100%'
-                height='100%'
-                onMouseMove={handleMouseMove}
-                onClick={handleSvgClick}
-                onMouseLeave={() => {
-                  setTooltip(null);
-                  if (!selectedSensor) {
-                    setHoveredSensor(null);
-                  }
-                }}
-                className={styles.timelineSvg}
-              >
-                {/* Time indicators */}
-                <g className={styles.timeIndicators}>
-                  {Object.values(data)[0]?.map((point, i, arr) => {
-                    const showDate =
-                      i === 0 ||
-                      new Date(point.timestamp).toLocaleDateString() !==
-                        new Date(arr[i - 1].timestamp).toLocaleDateString();
+              {/* Time indicators */}
+              <g className={styles.timeIndicators}>
+                {Object.values(data)[0]?.map((point, i, arr) => {
+                  const showDate =
+                    i === 0 ||
+                    new Date(point.timestamp).toLocaleDateString() !==
+                      new Date(arr[i - 1].timestamp).toLocaleDateString();
 
-                    const yPos = i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin;
-                    const isMobile = window.innerWidth < 768;
-                    const leftMargin = isMobile ? TIMELINE_CONFIG.mobileLeftMargin : TIMELINE_CONFIG.leftMargin;
-                    const xOffset = leftMargin - TIMELINE_CONFIG.timeIndicatorOffset;
+                  const yPos = i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin;
+                  const isMobile = window.innerWidth < 768;
+                  const leftMargin = isMobile ? TIMELINE_CONFIG.mobileLeftMargin : TIMELINE_CONFIG.leftMargin;
+                  const xOffset = leftMargin - TIMELINE_CONFIG.timeIndicatorOffset;
 
-                    return (
-                      <g key={i}>
-                        {showDate && (
-                          <>
-                            <text
-                              x={xOffset}
-                              y={yPos - TIMELINE_CONFIG.dateOffset - (i === 0 ? 12 : 0)}
-                              className={`${styles.dateLabel} ${i === 0 ? styles.yearLabel : ""}`}
-                              textAnchor='end'
-                              dominantBaseline='middle'
-                            >
-                              {i === 0 && point.timestamp.getFullYear()}
-                            </text>
-                            <text
-                              x={xOffset}
-                              y={yPos - TIMELINE_CONFIG.dateOffset}
-                              className={styles.dateLabel}
-                              textAnchor='end'
-                              dominantBaseline='middle'
-                            >
-                              {point.timestamp
-                                .toLocaleDateString([], {
-                                  month: "short",
-                                  day: "numeric",
-                                })
-                                .replace(",", "")}
-                            </text>
-                          </>
-                        )}
-                        <text
-                          x={xOffset}
-                          y={yPos}
-                          className={styles.timeLabel}
-                          textAnchor='end'
-                          dominantBaseline='middle'
-                        >
-                          {point.timestamp
-                            .toLocaleTimeString([], {
-                              hour: "numeric",
-                              minute: "2-digit",
-                              hour12: true,
-                            })
-                            .replace(":00", "")
-                            .replace(" ", "")}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </g>
-
-                {Object.values(SENSOR_GROUPS).flatMap((group) =>
-                  group.sensors.map((config) => {
-                    const points = data[config.sensorId] || [];
-                    if (points.length === 0) return null;
-
-                    const normalizedPoints = getNormalizedData(points);
-                    const isActive = selectedSensor
-                      ? selectedSensor === config.sensorId
-                      : hoveredSensor === config.sensorId;
-
-                    // Adjust opacity based on priority when not active
-                    const baseOpacity = isActive ? 1 : Math.max(0.1, 1 - config.priority * 0.25);
-
-                    return (
-                      <g
-                        key={config.sensorId}
-                        className={styles.sensorGroup}
-                        onMouseEnter={() => handleSensorHover(config.sensorId)}
-                        onMouseLeave={() => handleSensorHover(null)}
+                  return (
+                    <g key={i}>
+                      {showDate && (
+                        <>
+                          <text
+                            x={xOffset}
+                            y={yPos - TIMELINE_CONFIG.dateOffset - (i === 0 ? 12 : 0)}
+                            className={`${styles.dateLabel} ${i === 0 ? styles.yearLabel : ""}`}
+                            textAnchor='end'
+                            dominantBaseline='middle'
+                          >
+                            {i === 0 && point.timestamp.getFullYear()}
+                          </text>
+                          <text
+                            x={xOffset}
+                            y={yPos - TIMELINE_CONFIG.dateOffset}
+                            className={styles.dateLabel}
+                            textAnchor='end'
+                            dominantBaseline='middle'
+                          >
+                            {point.timestamp
+                              .toLocaleDateString([], {
+                                month: "short",
+                                day: "numeric",
+                              })
+                              .replace(",", "")}
+                          </text>
+                        </>
+                      )}
+                      <text
+                        x={xOffset}
+                        y={yPos}
+                        className={styles.timeLabel}
+                        textAnchor='end'
+                        dominantBaseline='middle'
                       >
-                        <path
-                          d={createLine(config.sensorId, normalizedPoints)}
-                          stroke={config.color}
-                          style={{ opacity: baseOpacity }}
-                          className={`${styles.sensorLine} ${isActive ? styles.sensorLineActive : ""}`}
-                          onMouseEnter={() => handleSensorHover(config.sensorId)}
-                        />
-                        {(isActive || config.priority === 1) &&
-                          normalizedPoints.map((point, i) => (
-                            <circle
-                              key={i}
-                              cx={scales[config.sensorId](point.normalizedValue || 0)}
-                              cy={i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin}
-                              r={isActive ? 5 : 3}
-                              style={{
-                                fill: config.color,
-                                opacity: baseOpacity,
-                              }}
-                              className={`${styles.dataPoint} ${isActive ? styles.dataPointActive : ""}`}
-                              onMouseEnter={() => handleSensorHover(config.sensorId)}
-                            />
-                          ))}
-                      </g>
-                    );
-                  })
-                )}
-              </svg>
-            </div>
+                        {point.timestamp
+                          .toLocaleTimeString([], {
+                            hour: "numeric",
+                            minute: "2-digit",
+                            hour12: true,
+                          })
+                          .replace(":00", "")
+                          .replace(" ", "")}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+
+              {Object.values(SENSOR_GROUPS).flatMap((group) =>
+                group.sensors.map((config) => {
+                  const points = data[config.sensorId] || [];
+                  if (points.length === 0) return null;
+
+                  const normalizedPoints = getNormalizedData(points);
+                  const isActive = selectedSensor
+                    ? selectedSensor === config.sensorId
+                    : hoveredSensor === config.sensorId;
+
+                  // Adjust opacity based on priority when not active
+                  const baseOpacity = isActive ? 1 : Math.max(0.1, 1 - config.priority * 0.25);
+
+                  return (
+                    <g
+                      key={config.sensorId}
+                      className={styles.sensorGroup}
+                      onMouseEnter={() => handleSensorHover(config.sensorId)}
+                      onMouseLeave={() => handleSensorHover(null)}
+                    >
+                      <path
+                        d={createLine(config.sensorId, normalizedPoints)}
+                        stroke={config.color}
+                        style={{ opacity: baseOpacity }}
+                        className={`${styles.sensorLine} ${isActive ? styles.sensorLineActive : ""}`}
+                        onMouseEnter={() => handleSensorHover(config.sensorId)}
+                      />
+                      {(isActive || config.priority === 1) &&
+                        normalizedPoints.map((point, i) => (
+                          <circle
+                            key={i}
+                            cx={scales[config.sensorId](point.normalizedValue || 0)}
+                            cy={i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin}
+                            r={isActive ? 5 : 3}
+                            style={{
+                              fill: config.color,
+                              opacity: baseOpacity,
+                            }}
+                            className={`${styles.dataPoint} ${isActive ? styles.dataPointActive : ""}`}
+                            onMouseEnter={() => handleSensorHover(config.sensorId)}
+                          />
+                        ))}
+                    </g>
+                  );
+                })
+              )}
+            </svg>
           </div>
-
-          {tooltip && (
-            <div
-              className={styles.tooltip}
-              style={{
-                left: tooltip.x,
-                top: tooltip.y,
-                borderColor: tooltip.color,
-              }}
-            >
-              <div className={styles.tooltipTitle} style={{ color: tooltip.color }}>
-                {tooltip.name}
-              </div>
-              <div className={styles.tooltipValue}>
-                {tooltip.value.toFixed(2)} {tooltip.unit}
-              </div>
-              <div className={styles.tooltipTime}>{tooltip.timestamp.toLocaleString()}</div>
-            </div>
-          )}
-
-          {isLoading && (
-            <div className={styles.loadingOverlay}>
-              <LoadingSpinner />
-            </div>
-          )}
+          <div ref={bottomTriggerRef} className={styles.scrollTrigger} />
         </div>
+
+        {tooltip && (
+          <div
+            className={styles.tooltip}
+            style={{
+              left: tooltip.x,
+              top: tooltip.y,
+              borderColor: tooltip.color,
+            }}
+          >
+            <div className={styles.tooltipTitle} style={{ color: tooltip.color }}>
+              {tooltip.name}
+            </div>
+            <div className={styles.tooltipValue}>
+              {tooltip.value.toFixed(2)} {tooltip.unit}
+            </div>
+            <div className={styles.tooltipTime}>{tooltip.timestamp.toLocaleString()}</div>
+          </div>
+        )}
+
+        {isLoading && (
+          <div className={styles.loadingOverlay}>
+            <LoadingSpinner />
+          </div>
+        )}
       </div>
     </>
   );

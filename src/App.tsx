@@ -29,7 +29,7 @@ function App() {
         <li>ICM20948: 9-DOF Motion (Accelerometer, Gyroscope, Magnetometer)</li>
       </ul>
 
-      <VerticalTimeline pageSize={48} />
+      <VerticalTimeline pageSize={12} />
       <footer>
         <p>View the code on GitHub</p>
         <ul>
