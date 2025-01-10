@@ -32,6 +32,8 @@ interface SensorConfig {
   name: string;
   color: string;
   unit: string;
+  priority: number;
+  range: [number, number];
 }
 
 interface RawDataRow {
@@ -61,44 +63,170 @@ const SENSOR_GROUPS = {
   environmental: {
     name: "Environmental",
     sensors: [
-      { sensorId: "avg_temp", name: "Temperature", color: "#ff6b6b", unit: "°C", priority: 1 },
-      { sensorId: "avg_hum", name: "Humidity", color: "#4dabf7", unit: "%", priority: 1 },
-      { sensorId: "avg_pressure", name: "Pressure", color: "#51cf66", unit: "hPa", priority: 2 },
-      { sensorId: "avg_lux", name: "Light", color: "#ffd43b", unit: "lux", priority: 2 },
-      { sensorId: "avg_uv", name: "UV", color: "#845ef7", unit: "index", priority: 2 },
-      { sensorId: "avg_gas", name: "Gas", color: "#339af0", unit: "Ω", priority: 2 },
+      {
+        sensorId: "avg_temp",
+        name: "Temperature",
+        color: "#ff6b6b",
+        unit: "°C",
+        priority: 1,
+        range: [-40, 85] as [number, number],
+      },
+      {
+        sensorId: "avg_hum",
+        name: "Humidity",
+        color: "#4dabf7",
+        unit: "%",
+        priority: 1,
+        range: [0, 100] as [number, number],
+      },
+      {
+        sensorId: "avg_pressure",
+        name: "Pressure",
+        color: "#51cf66",
+        unit: "hPa",
+        priority: 2,
+        range: [300, 1100] as [number, number],
+      },
+      {
+        sensorId: "avg_lux",
+        name: "Light",
+        color: "#ffd43b",
+        unit: "lux",
+        priority: 2,
+        range: [0, 88000] as [number, number],
+      },
+      {
+        sensorId: "avg_uv",
+        name: "UV",
+        color: "#845ef7",
+        unit: "index",
+        priority: 2,
+        range: [0, 11] as [number, number],
+      },
+      {
+        sensorId: "avg_gas",
+        name: "Gas",
+        color: "#339af0",
+        unit: "ppm",
+        priority: 2,
+        range: [0, 1000] as [number, number],
+      },
     ],
   },
   motion: {
     name: "Motion",
     sensors: [
-      { sensorId: "avg_roll", name: "Roll", color: "#ff922b", unit: "°", priority: 2 },
-      { sensorId: "avg_pitch", name: "Pitch", color: "#20c997", unit: "°", priority: 2 },
-      { sensorId: "avg_yaw", name: "Yaw", color: "#f06595", unit: "°", priority: 2 },
+      {
+        sensorId: "avg_roll",
+        name: "Roll",
+        color: "#ff922b",
+        unit: "°",
+        priority: 2,
+        range: [-180, 180] as [number, number],
+      },
+      {
+        sensorId: "avg_pitch",
+        name: "Pitch",
+        color: "#20c997",
+        unit: "°",
+        priority: 2,
+        range: [-180, 180] as [number, number],
+      },
+      {
+        sensorId: "avg_yaw",
+        name: "Yaw",
+        color: "#f06595",
+        unit: "°",
+        priority: 2,
+        range: [-180, 180] as [number, number],
+      },
     ],
   },
   acceleration: {
     name: "Acceleration",
     sensors: [
-      { sensorId: "avg_accel_x", name: "X Axis", color: "#ae3ec9", unit: "mg", priority: 3 },
-      { sensorId: "avg_accel_y", name: "Y Axis", color: "#7950f2", unit: "mg", priority: 3 },
-      { sensorId: "avg_accel_z", name: "Z Axis", color: "#fd7e14", unit: "mg", priority: 3 },
+      {
+        sensorId: "avg_accel_x",
+        name: "X Axis",
+        color: "#ae3ec9",
+        unit: "g",
+        priority: 3,
+        range: [-16, 16] as [number, number],
+      },
+      {
+        sensorId: "avg_accel_y",
+        name: "Y Axis",
+        color: "#7950f2",
+        unit: "g",
+        priority: 3,
+        range: [-16, 16] as [number, number],
+      },
+      {
+        sensorId: "avg_accel_z",
+        name: "Z Axis",
+        color: "#fd7e14",
+        unit: "g",
+        priority: 3,
+        range: [-16, 16] as [number, number],
+      },
     ],
   },
   gyroscope: {
     name: "Gyroscope",
     sensors: [
-      { sensorId: "avg_gyro_x", name: "X Axis", color: "#12b886", unit: "°/s", priority: 3 },
-      { sensorId: "avg_gyro_y", name: "Y Axis", color: "#15aabf", unit: "°/s", priority: 3 },
-      { sensorId: "avg_gyro_z", name: "Z Axis", color: "#1c7ed6", unit: "°/s", priority: 3 },
+      {
+        sensorId: "avg_gyro_x",
+        name: "X Axis",
+        color: "#12b886",
+        unit: "°/s",
+        priority: 3,
+        range: [-2000, 2000] as [number, number],
+      },
+      {
+        sensorId: "avg_gyro_y",
+        name: "Y Axis",
+        color: "#15aabf",
+        unit: "°/s",
+        priority: 3,
+        range: [-2000, 2000] as [number, number],
+      },
+      {
+        sensorId: "avg_gyro_z",
+        name: "Z Axis",
+        color: "#1c7ed6",
+        unit: "°/s",
+        priority: 3,
+        range: [-2000, 2000] as [number, number],
+      },
     ],
   },
   magnetometer: {
     name: "Magnetometer",
     sensors: [
-      { sensorId: "avg_mag_x", name: "X Axis", color: "#e64980", unit: "µT", priority: 3 },
-      { sensorId: "avg_mag_y", name: "Y Axis", color: "#f76707", unit: "µT", priority: 3 },
-      { sensorId: "avg_mag_z", name: "Z Axis", color: "#2b8a3e", unit: "µT", priority: 3 },
+      {
+        sensorId: "avg_mag_x",
+        name: "X Axis",
+        color: "#e64980",
+        unit: "µT",
+        priority: 3,
+        range: [-4900, 4900] as [number, number],
+      },
+      {
+        sensorId: "avg_mag_y",
+        name: "Y Axis",
+        color: "#f76707",
+        unit: "µT",
+        priority: 3,
+        range: [-4900, 4900] as [number, number],
+      },
+      {
+        sensorId: "avg_mag_z",
+        name: "Z Axis",
+        color: "#2b8a3e",
+        unit: "µT",
+        priority: 3,
+        range: [-4900, 4900] as [number, number],
+      },
     ],
   },
 };
@@ -117,8 +245,61 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const normalizeValue = (value: number, minVal: number, maxVal: number): number => {
-  return ((value - minVal) / (maxVal - minVal)) * 100;
+const normalizeValue = (
+  value: number,
+  minVal: number,
+  maxVal: number,
+  sensorRange: [number, number],
+  sensorId: string
+): number => {
+  // Handle null or undefined values
+  if (value == null) return 50; // Center null values
+
+  // Ensure the value is within the sensor's range
+  const clampedValue = Math.max(sensorRange[0], Math.min(sensorRange[1], value));
+
+  // Special handling for different sensor types
+  if (sensorId.includes("gas")) {
+    // Use logarithmic scale for gas readings (ppm)
+    const logValue = Math.log10(Math.max(0.1, clampedValue));
+    const logMin = Math.log10(Math.max(0.1, minVal));
+    const logMax = Math.log10(maxVal);
+    return Math.max(0, Math.min(100, ((logValue - logMin) / (logMax - logMin)) * 100));
+  }
+
+  if (sensorId.includes("lux")) {
+    // Use logarithmic scale for light readings
+    const logValue = Math.log10(Math.max(1, clampedValue));
+    const logMin = Math.log10(Math.max(1, minVal));
+    const logMax = Math.log10(maxVal);
+    return Math.max(0, Math.min(100, ((logValue - logMin) / (logMax - logMin)) * 100));
+  }
+
+  if (sensorId.includes("uv")) {
+    // Linear scale for UV index using actual data range
+    const normalizedToRange = ((clampedValue - minVal) / (maxVal - minVal)) * 100;
+    return Math.max(0, Math.min(100, normalizedToRange));
+  }
+
+  // For values that can be negative (like acceleration, gyro, magnetometer)
+  if (
+    sensorId.includes("accel") ||
+    sensorId.includes("gyro") ||
+    sensorId.includes("mag") ||
+    sensorId.includes("roll") ||
+    sensorId.includes("pitch") ||
+    sensorId.includes("yaw")
+  ) {
+    // Use the actual data range for better visualization
+    const dataRange = maxVal - minVal;
+    const normalized = ((clampedValue - minVal) / dataRange) * 100;
+    return Math.max(0, Math.min(100, normalized));
+  }
+
+  // For environmental sensors (temp, humidity, pressure)
+  // Use actual data range while respecting sensor limits
+  const normalizedToRange = ((clampedValue - minVal) / (maxVal - minVal)) * 100;
+  return Math.max(0, Math.min(100, normalizedToRange));
 };
 
 /**
@@ -163,11 +344,6 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
   const fetchSensorData = useCallback(
     async (afterDate?: Date, isPreload = false) => {
       try {
-        console.log("=== fetchSensorData called ===");
-        console.log("afterDate:", afterDate?.toISOString());
-        console.log("isPreload:", isPreload);
-        console.log("Current data length:", Object.values(data)[0]?.length || 0);
-
         if (!isPreload) {
           setIsLoading(true);
         } else {
@@ -176,7 +352,6 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
 
         const now = Date.now();
         if (now - lastLoadTime.current < loadingBuffer && !isPreload) {
-          console.log("Skipping fetch due to buffer time");
           return;
         }
         lastLoadTime.current = now;
@@ -186,35 +361,28 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
 
         // Initial load gets oldest data first
         if (!Object.keys(dateRanges).length) {
-          console.log("Initial load - getting first page");
-          query = query.order("day", { ascending: true }).limit(pageSize);
+          query = query.order("day", { ascending: false }).limit(pageSize);
         } else if (afterDate) {
-          console.log("Loading next page after:", afterDate.toISOString());
           // Get newer data (scrolling down)
-          query = query.gt("day", afterDate.toISOString()).order("day", { ascending: true }).limit(pageSize);
+          query = query.lt("day", afterDate.toISOString()).order("day", { ascending: false }).limit(pageSize);
         }
 
         const { data: rawData, error: queryError } = await query;
 
         if (queryError) throw new Error(queryError.message);
         if (!rawData || rawData.length === 0) {
-          console.log("No more data to load");
           return;
         }
 
         const typedRawData = rawData as unknown as RawDataRow[];
-        console.log(`Fetched ${typedRawData.length} new records`);
-        console.log("First record timestamp:", typedRawData[0].day);
-        console.log("Last record timestamp:", typedRawData[typedRawData.length - 1].day);
-
-        const transformedData: Record<string, DataPoint[]> = {};
         const timestamps = typedRawData.map((row) => new Date(row.day));
         const newEarliest = Math.min(...timestamps.map((d) => d.getTime()));
         const newLatest = Math.max(...timestamps.map((d) => d.getTime()));
 
+        const transformedData: Record<string, DataPoint[]> = {};
         SENSOR_CONFIGS.forEach((config) => {
           transformedData[config.sensorId] = typedRawData.map((row) => ({
-            timestamp: new Date(row.day),
+            timestamp: new Date(row.day.split("+")[0]),
             value: Number(row[config.sensorId]),
             sensorId: config.sensorId,
           }));
@@ -230,7 +398,6 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
               };
             } else if (afterDate) {
               const newLatestDate = new Date(Math.max(newLatest, prev[config.sensorId].latest.getTime()));
-              console.log("Updating date range for", config.sensorId, "new latest:", newLatestDate.toISOString());
               newRanges[config.sensorId].latest = newLatestDate;
             }
           });
@@ -243,27 +410,18 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
             const existingData = prev[config.sensorId] || [];
             const newSensorData = transformedData[config.sensorId];
 
-            console.log(`Processing ${config.sensorId}:`);
-            console.log("- Existing data points:", existingData.length);
-            console.log("- New data points:", newSensorData.length);
-
             // Create a Map using timestamp as key to ensure uniqueness
             const dataMap = new Map(existingData.map((point) => [point.timestamp.getTime(), point]));
 
             // Add new data points
-            let newPointsAdded = 0;
-            newSensorData.forEach((point) => {
+            newSensorData.forEach((point: DataPoint) => {
               const timestamp = point.timestamp.getTime();
               if (!dataMap.has(timestamp)) {
                 dataMap.set(timestamp, point);
-                newPointsAdded++;
               }
             });
 
-            console.log(`- Actually added ${newPointsAdded} new points`);
-            console.log("- Total points after merge:", dataMap.size);
-
-            // Convert back to array and sort by timestamp
+            // Convert back to array and sort by timestamp in ascending order (oldest first)
             newData[config.sensorId] = Array.from(dataMap.values()).sort(
               (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
             );
@@ -274,7 +432,6 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
         // Only setup preload if we actually got new data
         if (typedRawData.length === pageSize && !isPreload) {
           const latestTimestamp = new Date(Math.max(...timestamps.map((d) => d.getTime())));
-          console.log("Setting up preload for next page after:", latestTimestamp.toISOString());
 
           if (preloadTimer.current) {
             clearTimeout(preloadTimer.current);
@@ -293,10 +450,9 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
         } else {
           setIsLoading(false);
         }
-        console.log("=== fetchSensorData completed ===");
       }
     },
-    [pageSize, loadingBuffer, data, dateRanges] // Added data and dateRanges to dependencies
+    [pageSize, loadingBuffer, data, dateRanges]
   );
 
   // Initial data load
@@ -364,7 +520,7 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
         .scaleLinear()
         .domain([0, 100])
         .range([leftMargin + chartOffset, leftMargin + chartOffset + chartWidth])
-        .nice();
+        .clamp(true); // Ensure values are clamped to the range
       return acc;
     }, {});
   }, [dimensions?.width]);
@@ -373,14 +529,33 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
 
   // Normalize data points
   const getNormalizedData = useCallback((points: DataPoint[]): DataPoint[] => {
-    const values = points.map((d) => d.value);
-    const minVal = d3.min(values) || 0;
-    const maxVal = d3.max(values) || 100;
+    const sensorConfig = SENSOR_CONFIGS.find((config) => config.sensorId === points[0]?.sensorId);
+    if (!sensorConfig || !sensorConfig.range) return points;
 
-    return points.map((point) => ({
-      ...point,
-      normalizedValue: normalizeValue(point.value, minVal, maxVal),
-    }));
+    // Calculate actual min/max from data
+    const values = points.map((d) => d.value).filter((v) => v != null);
+    const minVal = Math.max(sensorConfig.range[0], Math.min(...values));
+    const maxVal = Math.min(sensorConfig.range[1], Math.max(...values));
+
+    return points.map((point) => {
+      const normalizedValue = normalizeValue(point.value, minVal, maxVal, sensorConfig.range, point.sensorId);
+
+      // Only warn if value is out of bounds in development
+      if (process.env.NODE_ENV === "development" && (normalizedValue < 0 || normalizedValue > 100)) {
+        console.warn(
+          `Normalized value out of bounds for ${point.sensorId}:`,
+          `raw=${point.value}`,
+          `normalized=${normalizedValue}`,
+          `range=[${minVal}, ${maxVal}]`,
+          `sensor range=[${sensorConfig.range[0]}, ${sensorConfig.range[1]}]`
+        );
+      }
+
+      return {
+        ...point,
+        normalizedValue,
+      };
+    });
   }, []);
 
   // Line generator
@@ -689,16 +864,30 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
               {/* Time indicators */}
               <g className={styles.timeIndicators}>
                 {Object.values(data)[0]?.map((point, i, arr) => {
-                  // Convert UTC to PST
-                  const pstDate = new Date(point.timestamp.getTime() - 7 * 60 * 60 * 1000); // UTC-7 for PST
-                  const prevPstDate = i > 0 ? new Date(arr[i - 1].timestamp.getTime() - 7 * 60 * 60 * 1000) : null;
+                  const date = point.timestamp;
+                  const prevDate = i > 0 ? arr[i - 1].timestamp : null;
 
-                  const showDate = i === 0 || pstDate.toLocaleDateString() !== prevPstDate?.toLocaleDateString();
+                  const showDate = i === 0 || date.getUTCDate() !== prevDate?.getUTCDate();
 
                   const yPos = i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin;
                   const isMobile = window.innerWidth < 768;
                   const leftMargin = isMobile ? TIMELINE_CONFIG.mobileLeftMargin : TIMELINE_CONFIG.leftMargin;
                   const xOffset = leftMargin - TIMELINE_CONFIG.timeIndicatorOffset;
+
+                  const monthNames = [
+                    "Jan",
+                    "Feb",
+                    "Mar",
+                    "Apr",
+                    "May",
+                    "Jun",
+                    "Jul",
+                    "Aug",
+                    "Sep",
+                    "Oct",
+                    "Nov",
+                    "Dec",
+                  ];
 
                   return (
                     <g key={i}>
@@ -711,7 +900,7 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                             textAnchor='end'
                             dominantBaseline='middle'
                           >
-                            {i === 0 && pstDate.getFullYear()}
+                            {i === 0 && date.getUTCFullYear()}
                           </text>
                           <text
                             x={xOffset}
@@ -720,12 +909,7 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                             textAnchor='end'
                             dominantBaseline='middle'
                           >
-                            {pstDate
-                              .toLocaleDateString([], {
-                                month: "short",
-                                day: "numeric",
-                              })
-                              .replace(",", "")}
+                            {`${monthNames[date.getUTCMonth()]} ${date.getUTCDate()}`}
                           </text>
                         </>
                       )}
@@ -801,16 +985,12 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
               {tooltip.value.toFixed(2)} {tooltip.unit}
             </div>
             <div className={styles.tooltipTime}>
-              {new Date(tooltip.timestamp.getTime() - 7 * 60 * 60 * 1000).toLocaleString([], {
-                year: "numeric",
-                month: "short",
-                day: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-                hour12: true,
-                timeZone: "America/Los_Angeles",
-              })}{" "}
-              PST
+              {`${tooltip.timestamp.getUTCFullYear()}-${String(tooltip.timestamp.getUTCMonth() + 1).padStart(
+                2,
+                "0"
+              )}-${String(tooltip.timestamp.getUTCDate()).padStart(2, "0")} ${String(
+                tooltip.timestamp.getUTCHours()
+              ).padStart(2, "0")}:${String(tooltip.timestamp.getUTCMinutes()).padStart(2, "0")}`}
             </div>
           </div>
         )}

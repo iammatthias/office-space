@@ -16,10 +16,13 @@ function App() {
         <a href='https://www.waveshare.com/wiki/Environment_Sensor_HAT' target='_blank' rel='noopener noreferrer'>
           Waveshare Environment Sensor HAT
         </a>{" "}
-        uses an array of sensors to track the enviromental conditions of my office.
+        tracks the enviromental conditions of my office.
       </p>
 
-      <p>The data is updated every minute, and an aggregate view of the data is presented in the timeline below.</p>
+      <p>
+        The data is updated in the DB every minute (minus the occasional hiccup), and a daily aggregate view is
+        displayed in the timeline below.
+      </p>
 
       <ul>
         <li>BME280: Temperature (-40°C to 85°C), Humidity (0-100%), and Pressure (300-1100 hPa)</li>

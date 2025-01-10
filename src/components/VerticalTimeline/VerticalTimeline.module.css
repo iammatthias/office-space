@@ -50,7 +50,8 @@
 
 .legendContent {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 1rem;
   padding: 0;
   overflow: hidden;
@@ -62,7 +63,7 @@
 }
 
 .legendExpanded .legendContent {
-  max-height: 500px;
+  max-height: none;
   padding: 1rem;
   opacity: 1;
   visibility: visible;
@@ -73,6 +74,22 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 140px;
+  flex: 1 1 auto;
+  max-width: calc(33.333% - 0.667rem);
+}
+
+@media (max-width: 1200px) {
+  .legendGroup {
+    max-width: calc(50% - 0.5rem);
+  }
+}
+
+@media (max-width: 768px) {
+  .legendGroup {
+    min-width: 120px;
+    max-width: calc(50% - 0.5rem);
+  }
 }
 
 .legendGroupHeader {
