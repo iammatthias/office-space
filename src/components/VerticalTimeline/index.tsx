@@ -35,7 +35,7 @@ interface SensorConfig {
 }
 
 interface RawDataRow {
-  hour: string;
+  day: string;
   [key: string]: unknown;
 }
 
@@ -182,16 +182,16 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
         lastLoadTime.current = now;
 
         const selectColumns = SENSOR_CONFIGS.map((config) => config.sensorId).join(",");
-        let query = supabase.from("hourly_aggregate").select(`hour,${selectColumns}`);
+        let query = supabase.from("daily_aggregate").select(`day,${selectColumns}`);
 
         // Initial load gets oldest data first
         if (!Object.keys(dateRanges).length) {
           console.log("Initial load - getting first page");
-          query = query.order("hour", { ascending: true }).limit(pageSize);
+          query = query.order("day", { ascending: true }).limit(pageSize);
         } else if (afterDate) {
           console.log("Loading next page after:", afterDate.toISOString());
           // Get newer data (scrolling down)
-          query = query.gt("hour", afterDate.toISOString()).order("hour", { ascending: true }).limit(pageSize);
+          query = query.gt("day", afterDate.toISOString()).order("day", { ascending: true }).limit(pageSize);
         }
 
         const { data: rawData, error: queryError } = await query;
@@ -204,17 +204,17 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
 
         const typedRawData = rawData as unknown as RawDataRow[];
         console.log(`Fetched ${typedRawData.length} new records`);
-        console.log("First record timestamp:", typedRawData[0].hour);
-        console.log("Last record timestamp:", typedRawData[typedRawData.length - 1].hour);
+        console.log("First record timestamp:", typedRawData[0].day);
+        console.log("Last record timestamp:", typedRawData[typedRawData.length - 1].day);
 
         const transformedData: Record<string, DataPoint[]> = {};
-        const timestamps = typedRawData.map((row) => new Date(row.hour));
+        const timestamps = typedRawData.map((row) => new Date(row.day));
         const newEarliest = Math.min(...timestamps.map((d) => d.getTime()));
         const newLatest = Math.max(...timestamps.map((d) => d.getTime()));
 
         SENSOR_CONFIGS.forEach((config) => {
           transformedData[config.sensorId] = typedRawData.map((row) => ({
-            timestamp: new Date(row.hour),
+            timestamp: new Date(row.day),
             value: Number(row[config.sensorId]),
             sensorId: config.sensorId,
           }));
@@ -689,10 +689,11 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
               {/* Time indicators */}
               <g className={styles.timeIndicators}>
                 {Object.values(data)[0]?.map((point, i, arr) => {
-                  const showDate =
-                    i === 0 ||
-                    new Date(point.timestamp).toLocaleDateString() !==
-                      new Date(arr[i - 1].timestamp).toLocaleDateString();
+                  // Convert UTC to PST
+                  const pstDate = new Date(point.timestamp.getTime() - 7 * 60 * 60 * 1000); // UTC-7 for PST
+                  const prevPstDate = i > 0 ? new Date(arr[i - 1].timestamp.getTime() - 7 * 60 * 60 * 1000) : null;
+
+                  const showDate = i === 0 || pstDate.toLocaleDateString() !== prevPstDate?.toLocaleDateString();
 
                   const yPos = i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin;
                   const isMobile = window.innerWidth < 768;
@@ -710,7 +711,7 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                             textAnchor='end'
                             dominantBaseline='middle'
                           >
-                            {i === 0 && point.timestamp.getFullYear()}
+                            {i === 0 && pstDate.getFullYear()}
                           </text>
                           <text
                             x={xOffset}
@@ -719,7 +720,7 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                             textAnchor='end'
                             dominantBaseline='middle'
                           >
-                            {point.timestamp
+                            {pstDate
                               .toLocaleDateString([], {
                                 month: "short",
                                 day: "numeric",
@@ -728,22 +729,6 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                           </text>
                         </>
                       )}
-                      <text
-                        x={xOffset}
-                        y={yPos}
-                        className={styles.timeLabel}
-                        textAnchor='end'
-                        dominantBaseline='middle'
-                      >
-                        {point.timestamp
-                          .toLocaleTimeString([], {
-                            hour: "numeric",
-                            minute: "2-digit",
-                            hour12: true,
-                          })
-                          .replace(":00", "")
-                          .replace(" ", "")}
-                      </text>
                     </g>
                   );
                 })}
@@ -815,7 +800,18 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
             <div className={styles.tooltipValue}>
               {tooltip.value.toFixed(2)} {tooltip.unit}
             </div>
-            <div className={styles.tooltipTime}>{tooltip.timestamp.toLocaleString()}</div>
+            <div className={styles.tooltipTime}>
+              {new Date(tooltip.timestamp.getTime() - 7 * 60 * 60 * 1000).toLocaleString([], {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+                timeZone: "America/Los_Angeles",
+              })}{" "}
+              PST
+            </div>
           </div>
         )}
 
