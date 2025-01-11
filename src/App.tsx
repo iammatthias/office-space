@@ -1,7 +1,5 @@
 // import { VerticalTimeline } from "./components/VerticalTimeline";
-import TempVisualization from "./components/TempVisualization";
-import LuxVisualization from "./components/LuxVisualization";
-import HumidityVisualization from "./components/HumidityVisualization";
+import Visualization from "./components/Visualization";
 
 function App() {
   return (
@@ -36,9 +34,9 @@ function App() {
       </ul>
 
       <main className='grid'>
-        <TempVisualization />
-        <LuxVisualization />
-        <HumidityVisualization />
+        <Visualization column='temp' title='Temperature' />
+        <Visualization column='lux' title='Lux' />
+        <Visualization column='hum' title='Humidity' />
       </main>
 
       {/* <VerticalTimeline pageSize={12} /> */}

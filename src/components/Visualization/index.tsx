@@ -1,15 +1,20 @@
 import { Canvas } from "@react-three/fiber";
 import { useEnvironmentalData } from "../../hooks/useEnvironmentalData";
-import { getColorForTemperature, organizeDataByDay, getTemperatureRange } from "./utils";
-import styles from "./TempVisualization.module.css";
+import { getColorFor, organizeDataByDay, getRange } from "./utils";
+import styles from "./Visualization.module.css";
 import { useMemo } from "react";
 import * as THREE from "three";
 
 const MINUTES_IN_DAY = 1440;
 const CANVAS_HEIGHT = 365 * 5;
 
-const TempVisualization = () => {
-  const { data, loading, error } = useEnvironmentalData("temp");
+interface VisualizationProps {
+  column: string;
+  title: string;
+}
+
+const Visualization = ({ column, title }: VisualizationProps) => {
+  const { data, loading, error } = useEnvironmentalData(column);
 
   const geometry = useMemo(() => {
     if (!data.length) return null;
@@ -18,15 +23,14 @@ const TempVisualization = () => {
     const numDays = Math.min(days.length, 365);
     const rowHeight = CANVAS_HEIGHT / numDays;
 
-    // Calculate temperature range for the entire dataset
-    const { min: minTemp, max: maxTemp } = getTemperatureRange(data);
+    // Calculate range for the entire dataset
+    const { min: minValue, max: maxValue } = getRange(data);
 
     const vertices: number[] = [];
     const colors: number[] = [];
     const indices: number[] = [];
 
     days.slice(0, numDays).forEach((dayData, dayIndex) => {
-      // Calculate y position: newest data at bottom (CANVAS_HEIGHT) and older data towards top
       const y = CANVAS_HEIGHT - (dayIndex + 1) * rowHeight;
       const minuteMap = new Map<number, number>();
 
@@ -46,19 +50,19 @@ const TempVisualization = () => {
       for (let minute = 0; minute < MINUTES_IN_DAY; minute++) {
         vertices.push(minute, y, 0, minute + 1, y, 0, minute + 1, y + rowHeight, 0, minute, y + rowHeight, 0);
 
-        let temp: number;
+        let value: number;
         if (minuteMap.has(minute)) {
-          temp = minuteMap.get(minute)!;
+          value = minuteMap.get(minute)!;
         } else {
           // Find nearest known values before and after current minute
           let beforeMinute = minute - 1;
           let afterMinute = minute + 1;
-          let beforeTemp: number | undefined;
-          let afterTemp: number | undefined;
+          let beforeValue: number | undefined;
+          let afterValue: number | undefined;
 
           while (beforeMinute >= firstMinute) {
             if (minuteMap.has(beforeMinute)) {
-              beforeTemp = minuteMap.get(beforeMinute);
+              beforeValue = minuteMap.get(beforeMinute);
               break;
             }
             beforeMinute--;
@@ -66,28 +70,29 @@ const TempVisualization = () => {
 
           while (afterMinute <= lastMinute) {
             if (minuteMap.has(afterMinute)) {
-              afterTemp = minuteMap.get(afterMinute);
+              afterValue = minuteMap.get(afterMinute);
               break;
             }
             afterMinute++;
           }
 
-          if (beforeTemp !== undefined && afterTemp !== undefined) {
+          if (beforeValue !== undefined && afterValue !== undefined) {
             // Interpolate between known values
             const range = afterMinute - beforeMinute;
             const weight = (minute - beforeMinute) / range;
-            temp = beforeTemp + (afterTemp - beforeTemp) * weight;
-          } else if (beforeTemp !== undefined) {
-            temp = beforeTemp;
-          } else if (afterTemp !== undefined) {
-            temp = afterTemp;
+            value = beforeValue + (afterValue - beforeValue) * weight;
+          } else if (beforeValue !== undefined) {
+            value = beforeValue;
+          } else if (afterValue !== undefined) {
+            value = afterValue;
           } else {
-            // If no data available for this day, use the average temperature
-            temp = (minTemp + maxTemp) / 2;
+            // If no data available for this day, use the average value
+            value = (minValue + maxValue) / 2;
           }
         }
 
-        const color = new THREE.Color(getColorForTemperature(temp, minTemp, maxTemp));
+        const colorHex = getColorFor(value, minValue, maxValue, column);
+        const color = new THREE.Color(colorHex);
         for (let i = 0; i < 4; i++) colors.push(color.r, color.g, color.b);
 
         const vertexIndex = (dayIndex * MINUTES_IN_DAY + minute) * 4;
@@ -101,7 +106,7 @@ const TempVisualization = () => {
     geometry.setIndex(indices);
 
     return geometry;
-  }, [data]);
+  }, [data, column]);
 
   if (loading) return <div className={styles.loadingContainer}>Loading...</div>;
   if (error) return <div className={styles.errorContainer}>Error: {error.message}</div>;
@@ -109,7 +114,7 @@ const TempVisualization = () => {
   return (
     <section className='grid-item'>
       <div className={styles.wrapper}>
-        <h2 className={styles.title}>Temperature</h2>
+        <h2 className={styles.title}>{title}</h2>
         <div className={styles.container}>
           <Canvas
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
@@ -138,4 +143,4 @@ const TempVisualization = () => {
   );
 };
 
-export default TempVisualization;
+export default Visualization;
