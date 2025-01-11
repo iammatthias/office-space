@@ -9,6 +9,7 @@ interface DataPoint {
   value: number;
   sensorId: string;
   normalizedValue?: number;
+  period: string;
 }
 
 interface TimelineProps {
@@ -37,7 +38,8 @@ interface SensorConfig {
 }
 
 interface RawDataRow {
-  day: string;
+  time: string;
+  period: string;
   [key: string]: unknown;
 }
 
@@ -64,7 +66,7 @@ const SENSOR_GROUPS = {
     name: "Environmental",
     sensors: [
       {
-        sensorId: "avg_temp",
+        sensorId: "temp",
         name: "Temperature",
         color: "#ff6b6b",
         unit: "°C",
@@ -72,7 +74,7 @@ const SENSOR_GROUPS = {
         range: [-40, 85] as [number, number],
       },
       {
-        sensorId: "avg_hum",
+        sensorId: "hum",
         name: "Humidity",
         color: "#4dabf7",
         unit: "%",
@@ -80,7 +82,7 @@ const SENSOR_GROUPS = {
         range: [0, 100] as [number, number],
       },
       {
-        sensorId: "avg_pressure",
+        sensorId: "pressure",
         name: "Pressure",
         color: "#51cf66",
         unit: "hPa",
@@ -88,7 +90,7 @@ const SENSOR_GROUPS = {
         range: [300, 1100] as [number, number],
       },
       {
-        sensorId: "avg_lux",
+        sensorId: "lux",
         name: "Light",
         color: "#ffd43b",
         unit: "lux",
@@ -96,7 +98,7 @@ const SENSOR_GROUPS = {
         range: [0, 88000] as [number, number],
       },
       {
-        sensorId: "avg_uv",
+        sensorId: "uv",
         name: "UV",
         color: "#845ef7",
         unit: "index",
@@ -104,7 +106,7 @@ const SENSOR_GROUPS = {
         range: [0, 11] as [number, number],
       },
       {
-        sensorId: "avg_gas",
+        sensorId: "gas",
         name: "Gas",
         color: "#339af0",
         unit: "ppm",
@@ -117,7 +119,7 @@ const SENSOR_GROUPS = {
     name: "Motion",
     sensors: [
       {
-        sensorId: "avg_roll",
+        sensorId: "roll",
         name: "Roll",
         color: "#ff922b",
         unit: "°",
@@ -125,7 +127,7 @@ const SENSOR_GROUPS = {
         range: [-180, 180] as [number, number],
       },
       {
-        sensorId: "avg_pitch",
+        sensorId: "pitch",
         name: "Pitch",
         color: "#20c997",
         unit: "°",
@@ -133,7 +135,7 @@ const SENSOR_GROUPS = {
         range: [-180, 180] as [number, number],
       },
       {
-        sensorId: "avg_yaw",
+        sensorId: "yaw",
         name: "Yaw",
         color: "#f06595",
         unit: "°",
@@ -146,7 +148,7 @@ const SENSOR_GROUPS = {
     name: "Acceleration",
     sensors: [
       {
-        sensorId: "avg_accel_x",
+        sensorId: "accel_x",
         name: "X Axis",
         color: "#ae3ec9",
         unit: "g",
@@ -154,7 +156,7 @@ const SENSOR_GROUPS = {
         range: [-16, 16] as [number, number],
       },
       {
-        sensorId: "avg_accel_y",
+        sensorId: "accel_y",
         name: "Y Axis",
         color: "#7950f2",
         unit: "g",
@@ -162,7 +164,7 @@ const SENSOR_GROUPS = {
         range: [-16, 16] as [number, number],
       },
       {
-        sensorId: "avg_accel_z",
+        sensorId: "accel_z",
         name: "Z Axis",
         color: "#fd7e14",
         unit: "g",
@@ -175,7 +177,7 @@ const SENSOR_GROUPS = {
     name: "Gyroscope",
     sensors: [
       {
-        sensorId: "avg_gyro_x",
+        sensorId: "gyro_x",
         name: "X Axis",
         color: "#12b886",
         unit: "°/s",
@@ -183,7 +185,7 @@ const SENSOR_GROUPS = {
         range: [-2000, 2000] as [number, number],
       },
       {
-        sensorId: "avg_gyro_y",
+        sensorId: "gyro_y",
         name: "Y Axis",
         color: "#15aabf",
         unit: "°/s",
@@ -191,7 +193,7 @@ const SENSOR_GROUPS = {
         range: [-2000, 2000] as [number, number],
       },
       {
-        sensorId: "avg_gyro_z",
+        sensorId: "gyro_z",
         name: "Z Axis",
         color: "#1c7ed6",
         unit: "°/s",
@@ -204,7 +206,7 @@ const SENSOR_GROUPS = {
     name: "Magnetometer",
     sensors: [
       {
-        sensorId: "avg_mag_x",
+        sensorId: "mag_x",
         name: "X Axis",
         color: "#e64980",
         unit: "µT",
@@ -212,7 +214,7 @@ const SENSOR_GROUPS = {
         range: [-4900, 4900] as [number, number],
       },
       {
-        sensorId: "avg_mag_y",
+        sensorId: "mag_y",
         name: "Y Axis",
         color: "#f76707",
         unit: "µT",
@@ -220,7 +222,7 @@ const SENSOR_GROUPS = {
         range: [-4900, 4900] as [number, number],
       },
       {
-        sensorId: "avg_mag_z",
+        sensorId: "mag_z",
         name: "Z Axis",
         color: "#2b8a3e",
         unit: "µT",
@@ -252,8 +254,8 @@ const normalizeValue = (
   sensorRange: [number, number],
   sensorId: string
 ): number => {
-  // Handle null or undefined values
-  if (value == null) return 50; // Center null values
+  // Handle null or undefined values as 0
+  if (value == null) return 0;
 
   // Ensure the value is within the sensor's range
   const clampedValue = Math.max(sensorRange[0], Math.min(sensorRange[1], value));
@@ -357,35 +359,69 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
         lastLoadTime.current = now;
 
         const selectColumns = SENSOR_CONFIGS.map((config) => config.sensorId).join(",");
-        let query = supabase.from("daily_aggregate").select(`day,${selectColumns}`);
+        let query = supabase
+          .from("daynight_data")
+          .select(`time,period,${selectColumns}`)
+          .order("time", { ascending: true });
 
         // Initial load gets oldest data first
         if (!Object.keys(dateRanges).length) {
-          query = query.order("day", { ascending: false }).limit(pageSize);
+          query = query.limit(pageSize);
         } else if (afterDate) {
           // Get newer data (scrolling down)
-          query = query.lt("day", afterDate.toISOString()).order("day", { ascending: false }).limit(pageSize);
+          query = query.gt("time", afterDate.toISOString()).limit(pageSize);
         }
 
         const { data: rawData, error: queryError } = await query;
 
-        if (queryError) throw new Error(queryError.message);
+        if (queryError) {
+          console.error("Query error:", queryError);
+          throw new Error(queryError.message);
+        }
+
         if (!rawData || rawData.length === 0) {
+          console.warn("No data received from query");
           return;
         }
 
-        const typedRawData = rawData as unknown as RawDataRow[];
-        const timestamps = typedRawData.map((row) => new Date(row.day));
+        console.log("Raw data sample:", rawData[0]);
+        console.log("Total rows received:", rawData.length);
+        console.log("Available columns:", Object.keys(rawData[0]));
+
+        const typedRawData = rawData as unknown[] as RawDataRow[];
+        const timestamps = typedRawData.map((row) => new Date(row.time));
         const newEarliest = Math.min(...timestamps.map((d) => d.getTime()));
         const newLatest = Math.max(...timestamps.map((d) => d.getTime()));
 
+        // Log timestamp range for debugging
+        console.log("Time range:", {
+          earliest: new Date(newEarliest).toISOString(),
+          latest: new Date(newLatest).toISOString(),
+        });
+
         const transformedData: Record<string, DataPoint[]> = {};
         SENSOR_CONFIGS.forEach((config) => {
-          transformedData[config.sensorId] = typedRawData.map((row) => ({
-            timestamp: new Date(row.day.split("+")[0]),
-            value: Number(row[config.sensorId]),
-            sensorId: config.sensorId,
-          }));
+          const sensorData = typedRawData
+            .map((row) => {
+              const value = row[config.sensorId];
+              const period = row.period;
+              if (!period) {
+                console.debug(`Missing period for sensor ${config.sensorId} at time ${row.time}`);
+                return null;
+              }
+              return {
+                timestamp: new Date(row.time),
+                value: value === null || value === undefined ? 0 : Number(value),
+                sensorId: config.sensorId,
+                period: period as string,
+              };
+            })
+            .filter((point): point is DataPoint => point !== null);
+
+          transformedData[config.sensorId] = sensorData;
+
+          // Log data points count for each sensor
+          console.debug(`Sensor ${config.sensorId} has ${sensorData.length} data points`);
         });
 
         setDateRanges((prev) => {
@@ -866,8 +902,9 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                 {Object.values(data)[0]?.map((point, i, arr) => {
                   const date = point.timestamp;
                   const prevDate = i > 0 ? arr[i - 1].timestamp : null;
+                  const periodEmoji = point.period.toLowerCase() === "day" ? "☀️" : "🌙";
 
-                  const showDate = i === 0 || date.getUTCDate() !== prevDate?.getUTCDate();
+                  const showDate = i === 0 || date.getDate() !== prevDate?.getDate();
 
                   const yPos = i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin;
                   const isMobile = window.innerWidth < 768;
@@ -900,7 +937,7 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                             textAnchor='end'
                             dominantBaseline='middle'
                           >
-                            {i === 0 && date.getUTCFullYear()}
+                            {i === 0 && date.getFullYear()}
                           </text>
                           <text
                             x={xOffset}
@@ -909,10 +946,22 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                             textAnchor='end'
                             dominantBaseline='middle'
                           >
-                            {`${monthNames[date.getUTCMonth()]} ${date.getUTCDate()}`}
+                            {`${monthNames[date.getMonth()]} ${date.getDate()}`}
                           </text>
                         </>
                       )}
+                      <text
+                        x={xOffset}
+                        y={yPos}
+                        className={styles.timeLabel}
+                        textAnchor='end'
+                        dominantBaseline='middle'
+                      >
+                        {`${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(
+                          2,
+                          "0"
+                        )} ${periodEmoji}`}
+                      </text>
                     </g>
                   );
                 })}
@@ -985,12 +1034,12 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
               {tooltip.value.toFixed(2)} {tooltip.unit}
             </div>
             <div className={styles.tooltipTime}>
-              {`${tooltip.timestamp.getUTCFullYear()}-${String(tooltip.timestamp.getUTCMonth() + 1).padStart(
+              {`${tooltip.timestamp.getFullYear()}-${String(tooltip.timestamp.getMonth() + 1).padStart(
                 2,
                 "0"
-              )}-${String(tooltip.timestamp.getUTCDate()).padStart(2, "0")} ${String(
-                tooltip.timestamp.getUTCHours()
-              ).padStart(2, "0")}:${String(tooltip.timestamp.getUTCMinutes()).padStart(2, "0")}`}
+              )}-${String(tooltip.timestamp.getDate()).padStart(2, "0")} ${String(
+                tooltip.timestamp.getHours()
+              ).padStart(2, "0")}:${String(tooltip.timestamp.getMinutes()).padStart(2, "0")}`}
             </div>
           </div>
         )}
