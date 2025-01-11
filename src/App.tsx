@@ -20,10 +20,7 @@ function App() {
         tracks the enviromental conditions of my office.
       </p>
 
-      <p>
-        The data is updated in the DB every minute (minus the occasional hiccup), and a daily aggregate view is
-        displayed in the timeline below.
-      </p>
+      <p>The database updates every minute (minus the occasional hiccup), and each sensor is rendered below.</p>
 
       <ul>
         <li>BME280: Temperature (-40°C to 85°C), Humidity (0-100%), and Pressure (300-1100 hPa)</li>
