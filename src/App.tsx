@@ -1,5 +1,7 @@
-import { VerticalTimeline } from "./components/VerticalTimeline";
-import { TempVisualization } from "./components/TempVisualization";
+// import { VerticalTimeline } from "./components/VerticalTimeline";
+import TempVisualization from "./components/TempVisualization";
+import LuxVisualization from "./components/LuxVisualization";
+import HumidityVisualization from "./components/HumidityVisualization";
 
 function App() {
   return (
@@ -33,9 +35,13 @@ function App() {
         <li>ICM20948: 9-DOF Motion (Accelerometer, Gyroscope, Magnetometer)</li>
       </ul>
 
-      {/* <TempVisualization /> */}
+      <main className='grid'>
+        <TempVisualization />
+        <LuxVisualization />
+        <HumidityVisualization />
+      </main>
 
-      <VerticalTimeline pageSize={12} />
+      {/* <VerticalTimeline pageSize={12} /> */}
 
       <footer>
         <p>View the code on GitHub</p>

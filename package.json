@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-three/drei": "^9.120.7",
     "@react-three/fiber": "^8.17.12",
     "@supabase/supabase-js": "^2.47.10",
     "@types/d3": "^7.4.3",

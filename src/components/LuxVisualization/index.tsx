@@ -1,6 +1,6 @@
 import { Canvas } from "@react-three/fiber";
 import { useEnvironmentalData } from "../../hooks/useEnvironmentalData";
-import { getColorForTemperature, organizeDataByDay, getTemperatureRange } from "./utils";
+import { getColorForLux, organizeDataByDay, getLuxRange } from "./utils";
 import styles from "./TempVisualization.module.css";
 import { useMemo } from "react";
 import * as THREE from "three";
@@ -8,8 +8,8 @@ import * as THREE from "three";
 const MINUTES_IN_DAY = 1440;
 const CANVAS_HEIGHT = 365 * 5;
 
-const TempVisualization = () => {
-  const { data, loading, error } = useEnvironmentalData("temp");
+const LuxVisualization = () => {
+  const { data, loading, error } = useEnvironmentalData("lux");
 
   const geometry = useMemo(() => {
     if (!data.length) return null;
@@ -18,8 +18,8 @@ const TempVisualization = () => {
     const numDays = Math.min(days.length, 365);
     const rowHeight = CANVAS_HEIGHT / numDays;
 
-    // Calculate temperature range for the entire dataset
-    const { min: minTemp, max: maxTemp } = getTemperatureRange(data);
+    // Calculate lux range for the entire dataset
+    const { min: minLux, max: maxLux } = getLuxRange(data);
 
     const vertices: number[] = [];
     const colors: number[] = [];
@@ -46,19 +46,19 @@ const TempVisualization = () => {
       for (let minute = 0; minute < MINUTES_IN_DAY; minute++) {
         vertices.push(minute, y, 0, minute + 1, y, 0, minute + 1, y + rowHeight, 0, minute, y + rowHeight, 0);
 
-        let temp: number;
+        let luxValue: number;
         if (minuteMap.has(minute)) {
-          temp = minuteMap.get(minute)!;
+          luxValue = minuteMap.get(minute)!;
         } else {
           // Find nearest known values before and after current minute
           let beforeMinute = minute - 1;
           let afterMinute = minute + 1;
-          let beforeTemp: number | undefined;
-          let afterTemp: number | undefined;
+          let beforeLux: number | undefined;
+          let afterLux: number | undefined;
 
           while (beforeMinute >= firstMinute) {
             if (minuteMap.has(beforeMinute)) {
-              beforeTemp = minuteMap.get(beforeMinute);
+              beforeLux = minuteMap.get(beforeMinute);
               break;
             }
             beforeMinute--;
@@ -66,28 +66,28 @@ const TempVisualization = () => {
 
           while (afterMinute <= lastMinute) {
             if (minuteMap.has(afterMinute)) {
-              afterTemp = minuteMap.get(afterMinute);
+              afterLux = minuteMap.get(afterMinute);
               break;
             }
             afterMinute++;
           }
 
-          if (beforeTemp !== undefined && afterTemp !== undefined) {
+          if (beforeLux !== undefined && afterLux !== undefined) {
             // Interpolate between known values
             const range = afterMinute - beforeMinute;
             const weight = (minute - beforeMinute) / range;
-            temp = beforeTemp + (afterTemp - beforeTemp) * weight;
-          } else if (beforeTemp !== undefined) {
-            temp = beforeTemp;
-          } else if (afterTemp !== undefined) {
-            temp = afterTemp;
+            luxValue = beforeLux + (afterLux - beforeLux) * weight;
+          } else if (beforeLux !== undefined) {
+            luxValue = beforeLux;
+          } else if (afterLux !== undefined) {
+            luxValue = afterLux;
           } else {
-            // If no data available for this day, use the average temperature
-            temp = (minTemp + maxTemp) / 2;
+            // If no data available for this day, use the average value
+            luxValue = (minLux + maxLux) / 2;
           }
         }
 
-        const color = new THREE.Color(getColorForTemperature(temp, minTemp, maxTemp));
+        const color = new THREE.Color(getColorForLux(luxValue, minLux, maxLux));
         for (let i = 0; i < 4; i++) colors.push(color.r, color.g, color.b);
 
         const vertexIndex = (dayIndex * MINUTES_IN_DAY + minute) * 4;
@@ -109,7 +109,7 @@ const TempVisualization = () => {
   return (
     <section className='grid-item'>
       <div className={styles.wrapper}>
-        <h2 className={styles.title}>Temperature</h2>
+        <h2 className={styles.title}>Lux</h2>
         <div className={styles.container}>
           <Canvas
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
@@ -138,4 +138,4 @@ const TempVisualization = () => {
   );
 };
 
-export default TempVisualization;
+export default LuxVisualization;
