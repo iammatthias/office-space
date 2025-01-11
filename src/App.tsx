@@ -1,4 +1,5 @@
 import { VerticalTimeline } from "./components/VerticalTimeline";
+import { TempVisualization } from "./components/TempVisualization";
 
 function App() {
   return (
@@ -32,12 +33,15 @@ function App() {
         <li>ICM20948: 9-DOF Motion (Accelerometer, Gyroscope, Magnetometer)</li>
       </ul>
 
+      {/* <TempVisualization /> */}
+
       <VerticalTimeline pageSize={12} />
+
       <footer>
         <p>View the code on GitHub</p>
         <ul>
           <li>
-            <a href='https://github.com/jason-m-smith/office-space' target='_blank' rel='noopener noreferrer'>
+            <a href='https://github.com/iammatthias/office-space' target='_blank' rel='noopener noreferrer'>
               Frontend
             </a>
           </li>
