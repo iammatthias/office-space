@@ -10,6 +10,7 @@ interface DataPoint {
   sensorId: string;
   normalizedValue?: number;
   period: string;
+  isNew?: boolean;
 }
 
 interface TimelineProps {
@@ -233,7 +234,6 @@ const SENSOR_GROUPS = {
   },
 };
 
-// Replace SENSOR_CONFIGS with a flattened version for backward compatibility
 const SENSOR_CONFIGS = Object.values(SENSOR_GROUPS).flatMap((group) =>
   group.sensors.map((sensor) => ({
     ...sensor,
@@ -254,15 +254,10 @@ const normalizeValue = (
   sensorRange: [number, number],
   sensorId: string
 ): number => {
-  // Handle null or undefined values as 0
   if (value == null) return 0;
-
-  // Ensure the value is within the sensor's range
   const clampedValue = Math.max(sensorRange[0], Math.min(sensorRange[1], value));
 
-  // Special handling for different sensor types
   if (sensorId.includes("gas")) {
-    // Use logarithmic scale for gas readings (ppm)
     const logValue = Math.log10(Math.max(0.1, clampedValue));
     const logMin = Math.log10(Math.max(0.1, minVal));
     const logMax = Math.log10(maxVal);
@@ -270,7 +265,6 @@ const normalizeValue = (
   }
 
   if (sensorId.includes("lux")) {
-    // Use logarithmic scale for light readings
     const logValue = Math.log10(Math.max(1, clampedValue));
     const logMin = Math.log10(Math.max(1, minVal));
     const logMax = Math.log10(maxVal);
@@ -278,12 +272,10 @@ const normalizeValue = (
   }
 
   if (sensorId.includes("uv")) {
-    // Linear scale for UV index using actual data range
     const normalizedToRange = ((clampedValue - minVal) / (maxVal - minVal)) * 100;
     return Math.max(0, Math.min(100, normalizedToRange));
   }
 
-  // For values that can be negative (like acceleration, gyro, magnetometer)
   if (
     sensorId.includes("accel") ||
     sensorId.includes("gyro") ||
@@ -292,49 +284,33 @@ const normalizeValue = (
     sensorId.includes("pitch") ||
     sensorId.includes("yaw")
   ) {
-    // Use the actual data range for better visualization
     const dataRange = maxVal - minVal;
     const normalized = ((clampedValue - minVal) / dataRange) * 100;
     return Math.max(0, Math.min(100, normalized));
   }
 
-  // For environmental sensors (temp, humidity, pressure)
-  // Use actual data range while respecting sensor limits
   const normalizedToRange = ((clampedValue - minVal) / (maxVal - minVal)) * 100;
   return Math.max(0, Math.min(100, normalizedToRange));
 };
 
-/**
- * VerticalTimeline Component
- *
- * Displays multiple sensor readings over time in a vertically scrolling timeline.
- * Features:
- * - Interactive hover states with tooltips
- * - Infinite scrolling in both directions
- * - Dynamic data normalization
- * - Responsive layout
- */
 export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: TimelineProps) => {
-  // State management
   const [data, setData] = useState<Record<string, DataPoint[]>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isPreloading, setIsPreloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoveredSensor, setHoveredSensor] = useState<string | null>(null);
+  const [selectedSensor, setSelectedSensor] = useState<string | null>(null);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
   const [dateRanges, setDateRanges] = useState<Record<string, { earliest: Date; latest: Date }>>({});
   const [isLegendExpanded, setIsLegendExpanded] = useState(false);
-  const [isPreloading, setIsPreloading] = useState(false);
-  const [selectedSensor, setSelectedSensor] = useState<string | null>(null);
+
   const lastLoadTime = useRef<number>(0);
   const preloadTimer = useRef<NodeJS.Timeout>();
-
-  // Refs
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const dimensions = useResizeObserver(containerRef);
-
-  // Add refs for top and bottom observers
   const bottomTriggerRef = useRef<HTMLDivElement>(null);
+
+  const dimensions = useResizeObserver(containerRef);
 
   useEffect(() => {
     if (containerRef.current) {
@@ -342,7 +318,24 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
     }
   }, []);
 
-  // Simplified data fetching with cursor-based pagination
+  const mergeData = useCallback((prevData: Record<string, DataPoint[]>, newData: Record<string, DataPoint[]>) => {
+    const mergedData = { ...prevData };
+    Object.entries(newData).forEach(([sensorId, newPoints]) => {
+      const existingPoints = mergedData[sensorId] || [];
+      const pointMap = new Map(existingPoints.map((p) => [p.timestamp.getTime(), p]));
+      newPoints.forEach((point) => {
+        const t = point.timestamp.getTime();
+        if (!pointMap.has(t)) {
+          pointMap.set(t, { ...point, isNew: true });
+        }
+      });
+      mergedData[sensorId] = Array.from(pointMap.values()).sort(
+        (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+      );
+    });
+    return mergedData;
+  }, []);
+
   const fetchSensorData = useCallback(
     async (afterDate?: Date, isPreload = false) => {
       try {
@@ -351,78 +344,44 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
         } else {
           setIsPreloading(true);
         }
-
         const now = Date.now();
         if (now - lastLoadTime.current < loadingBuffer && !isPreload) {
           return;
         }
         lastLoadTime.current = now;
 
-        const selectColumns = SENSOR_CONFIGS.map((config) => config.sensorId).join(",");
+        const selectColumns = SENSOR_CONFIGS.map((c) => c.sensorId).join(",");
         let query = supabase
           .from("daynight_data")
           .select(`time,period,${selectColumns}`)
           .order("time", { ascending: true });
 
-        // Initial load gets oldest data first
         if (!Object.keys(dateRanges).length) {
           query = query.limit(pageSize);
         } else if (afterDate) {
-          // Get newer data (scrolling down)
           query = query.gt("time", afterDate.toISOString()).limit(pageSize);
         }
 
         const { data: rawData, error: queryError } = await query;
+        if (queryError) throw new Error(queryError.message);
+        if (!rawData || rawData.length === 0) return;
 
-        if (queryError) {
-          console.error("Query error:", queryError);
-          throw new Error(queryError.message);
-        }
-
-        if (!rawData || rawData.length === 0) {
-          console.warn("No data received from query");
-          return;
-        }
-
-        console.log("Raw data sample:", rawData[0]);
-        console.log("Total rows received:", rawData.length);
-        console.log("Available columns:", Object.keys(rawData[0]));
-
-        const typedRawData = rawData as unknown[] as RawDataRow[];
+        const typedRawData = rawData as unknown as RawDataRow[];
         const timestamps = typedRawData.map((row) => new Date(row.time));
         const newEarliest = Math.min(...timestamps.map((d) => d.getTime()));
         const newLatest = Math.max(...timestamps.map((d) => d.getTime()));
 
-        // Log timestamp range for debugging
-        console.log("Time range:", {
-          earliest: new Date(newEarliest).toISOString(),
-          latest: new Date(newLatest).toISOString(),
-        });
-
         const transformedData: Record<string, DataPoint[]> = {};
         SENSOR_CONFIGS.forEach((config) => {
-          const sensorData = typedRawData
-            .map((row) => {
-              const value = row[config.sensorId];
-              const period = row.period;
-              if (!period) {
-                console.debug(`Missing period for sensor ${config.sensorId} at time ${row.time}`);
-                return null;
-              }
-              return {
-                timestamp: new Date(row.time),
-                value: value === null || value === undefined ? 0 : Number(value),
-                sensorId: config.sensorId,
-                period: period as string,
-              };
-            })
-            .filter((point): point is DataPoint => point !== null);
-
-          transformedData[config.sensorId] = sensorData;
-
-          // Log data points count for each sensor
-          console.debug(`Sensor ${config.sensorId} has ${sensorData.length} data points`);
+          transformedData[config.sensorId] = typedRawData.map((row) => ({
+            timestamp: new Date(row.time),
+            value: row[config.sensorId] == null ? 0 : Number(row[config.sensorId]),
+            sensorId: config.sensorId,
+            period: row.period ? row.period : "",
+          }));
         });
+
+        setData((prev) => mergeData(prev, transformedData));
 
         setDateRanges((prev) => {
           const newRanges = { ...prev };
@@ -433,199 +392,124 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                 latest: new Date(newLatest),
               };
             } else if (afterDate) {
-              const newLatestDate = new Date(Math.max(newLatest, prev[config.sensorId].latest.getTime()));
-              newRanges[config.sensorId].latest = newLatestDate;
+              newRanges[config.sensorId].latest = new Date(Math.max(newLatest, prev[config.sensorId].latest.getTime()));
             }
           });
           return newRanges;
         });
 
-        setData((prev) => {
-          const newData = { ...prev };
-          SENSOR_CONFIGS.forEach((config) => {
-            const existingData = prev[config.sensorId] || [];
-            const newSensorData = transformedData[config.sensorId];
-
-            // Create a Map using timestamp as key to ensure uniqueness
-            const dataMap = new Map(existingData.map((point) => [point.timestamp.getTime(), point]));
-
-            // Add new data points
-            newSensorData.forEach((point: DataPoint) => {
-              const timestamp = point.timestamp.getTime();
-              if (!dataMap.has(timestamp)) {
-                dataMap.set(timestamp, point);
-              }
-            });
-
-            // Convert back to array and sort by timestamp in ascending order (oldest first)
-            newData[config.sensorId] = Array.from(dataMap.values()).sort(
-              (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-            );
-          });
-          return newData;
-        });
-
-        // Only setup preload if we actually got new data
         if (typedRawData.length === pageSize && !isPreload) {
           const latestTimestamp = new Date(Math.max(...timestamps.map((d) => d.getTime())));
-
           if (preloadTimer.current) {
             clearTimeout(preloadTimer.current);
           }
-
           preloadTimer.current = setTimeout(() => {
             fetchSensorData(latestTimestamp, true);
           }, 100);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error fetching data:", err);
-        setError(err instanceof Error ? err.message : "Failed to fetch data");
+        setError(err.message);
       } finally {
-        if (isPreload) {
-          setIsPreloading(false);
-        } else {
-          setIsLoading(false);
-        }
+        if (isPreload) setIsPreloading(false);
+        else setIsLoading(false);
       }
     },
-    [pageSize, loadingBuffer, data, dateRanges]
+    [dateRanges, pageSize, loadingBuffer, mergeData]
   );
 
-  // Initial data load
   useEffect(() => {
     fetchSensorData();
   }, [fetchSensorData]);
 
-  // Setup intersection observer for bottom loading
   useEffect(() => {
     let observer: IntersectionObserver | null = null;
-
     const loadData = () => {
       const sensorData = Object.values(data)[0] || [];
-      if (sensorData.length === 0) return;
-
+      if (!sensorData.length) return;
       const newestDate = sensorData[sensorData.length - 1].timestamp;
-      console.log("Intersection observer triggering load after:", newestDate.toISOString());
       fetchSensorData(newestDate, false);
     };
 
     const bottomObserverCallback: IntersectionObserverCallback = (entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting && !isLoading && !isPreloading) {
-          console.log("Intersection observer triggered");
           loadData();
         }
       });
     };
 
-    // Create observer with options optimized for scroll detection
     observer = new IntersectionObserver(bottomObserverCallback, {
       root: null,
       threshold: 0,
       rootMargin: "0px 0px 50px 0px",
     });
-
-    // Ensure the trigger element exists before observing
-    const triggerElement = bottomTriggerRef.current;
-    if (triggerElement) {
-      observer.observe(triggerElement);
-      console.log("Observer attached to trigger element");
+    if (bottomTriggerRef.current) {
+      observer.observe(bottomTriggerRef.current);
     }
 
-    // Cleanup function
     return () => {
-      if (observer) {
-        observer.disconnect();
-      }
+      if (observer) observer.disconnect();
     };
   }, [data, isLoading, isPreloading, fetchSensorData]);
 
-  // D3 scale creation (memoized)
   const getScales = useCallback(() => {
     if (!dimensions?.width) return {};
-
     const isMobile = window.innerWidth < 768;
     const leftMargin = isMobile ? TIMELINE_CONFIG.mobileLeftMargin : TIMELINE_CONFIG.leftMargin;
     const rightMargin = isMobile ? 20 : TIMELINE_CONFIG.rightMargin;
     const chartOffset = isMobile ? TIMELINE_CONFIG.mobileChartOffset : 0;
 
     const chartWidth = Math.max(dimensions.width - leftMargin - rightMargin - chartOffset, TIMELINE_CONFIG.minWidth);
-
     return SENSOR_CONFIGS.reduce<Record<string, d3.ScaleLinear<number, number>>>((acc, config) => {
       acc[config.sensorId] = d3
         .scaleLinear()
         .domain([0, 100])
         .range([leftMargin + chartOffset, leftMargin + chartOffset + chartWidth])
-        .clamp(true); // Ensure values are clamped to the range
+        .clamp(true);
       return acc;
     }, {});
   }, [dimensions?.width]);
 
   const scales = getScales();
 
-  // Normalize data points
-  const getNormalizedData = useCallback((points: DataPoint[]): DataPoint[] => {
-    const sensorConfig = SENSOR_CONFIGS.find((config) => config.sensorId === points[0]?.sensorId);
-    if (!sensorConfig || !sensorConfig.range) return points;
+  const getNormalizedData = useCallback((points: DataPoint[]) => {
+    if (!points[0]) return points;
+    const sensorConfig = SENSOR_CONFIGS.find((c) => c.sensorId === points[0].sensorId);
+    if (!sensorConfig) return points;
 
-    // Calculate actual min/max from data
-    const values = points.map((d) => d.value).filter((v) => v != null);
+    const values = points.map((d) => d.value);
     const minVal = Math.max(sensorConfig.range[0], Math.min(...values));
     const maxVal = Math.min(sensorConfig.range[1], Math.max(...values));
 
-    return points.map((point) => {
-      const normalizedValue = normalizeValue(point.value, minVal, maxVal, sensorConfig.range, point.sensorId);
-
-      // Only warn if value is out of bounds in development
-      if (process.env.NODE_ENV === "development" && (normalizedValue < 0 || normalizedValue > 100)) {
-        console.warn(
-          `Normalized value out of bounds for ${point.sensorId}:`,
-          `raw=${point.value}`,
-          `normalized=${normalizedValue}`,
-          `range=[${minVal}, ${maxVal}]`,
-          `sensor range=[${sensorConfig.range[0]}, ${sensorConfig.range[1]}]`
-        );
-      }
-
-      return {
-        ...point,
-        normalizedValue,
-      };
-    });
+    return points.map((p) => ({
+      ...p,
+      normalizedValue: normalizeValue(p.value, minVal, maxVal, sensorConfig.range, p.sensorId),
+    }));
   }, []);
 
-  // Line generator
   const createLine = useCallback(
     (sensorId: string, normalizedPoints: DataPoint[]) => {
       const scale = scales[sensorId];
-      if (!scale || normalizedPoints.length === 0) return "";
-
-      const lineGenerator = d3
-        .line<DataPoint>()
-        .x((d) => scale(d.normalizedValue || 0))
-        .y((_, i) => i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin)
-        .curve(d3.curveCatmullRom.alpha(0.5));
-
-      return lineGenerator(normalizedPoints) || "";
+      if (!scale || !normalizedPoints.length) return "";
+      return (
+        d3
+          .line<DataPoint>()
+          .x((d) => scale(d.normalizedValue ?? 0))
+          .y((_, i) => i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin)
+          .curve(d3.curveCatmullRom.alpha(0.5))(normalizedPoints) ?? ""
+      );
     },
     [scales]
   );
 
-  // Add handler for managing sensor selection
   const handleSensorSelection = useCallback(
     (sensorId: string | null) => {
-      if (sensorId === null) {
-        // Handle deselection
-        setSelectedSensor(null);
-        setHoveredSensor(null);
-        setTooltip(null);
-      } else if (sensorId === selectedSensor) {
-        // Deselect if clicking the same sensor
+      if (!sensorId || sensorId === selectedSensor) {
         setSelectedSensor(null);
         setHoveredSensor(null);
         setTooltip(null);
       } else {
-        // Select new sensor and update hover states
         setSelectedSensor(sensorId);
         setHoveredSensor(sensorId);
       }
@@ -633,10 +517,8 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
     [selectedSensor]
   );
 
-  // Add handler for managing hover states
   const handleSensorHover = useCallback(
     (sensorId: string | null) => {
-      // Only update hover states if no sensor is selected
       if (!selectedSensor) {
         setHoveredSensor(sensorId);
       }
@@ -644,84 +526,66 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
     [selectedSensor]
   );
 
-  // Add handler for deselection
   const handleDeselect = useCallback(() => {
-    if (selectedSensor) {
-      setSelectedSensor(null);
-      setHoveredSensor(null);
-      setTooltip(null);
-    }
-  }, [selectedSensor]);
+    setSelectedSensor(null);
+    setHoveredSensor(null);
+    setTooltip(null);
+  }, []);
 
-  // Add helper function to find closest sensor
   const findClosestSensor = useCallback(
-    (mouseX: number, mouseY: number): { sensorId: string; groupIndex: number } | null => {
+    (mouseX: number, mouseY: number) => {
       let closestLine: ClosestLine | null = null;
-      let minLineDistance = Infinity;
-
+      let minDist = Infinity;
       SENSOR_CONFIGS.forEach((config, groupIndex) => {
-        // Remove the filter for selected sensor to allow finding any closest line
         const points = data[config.sensorId] || [];
-        if (points.length === 0) return;
-
-        const normalizedPoints: DataPoint[] = getNormalizedData(points);
+        if (!points.length) return;
+        const normalized = getNormalizedData(points);
         const scale = scales[config.sensorId];
         if (!scale) return;
 
-        // Find the two points that vertically bracket the mouse position
         const mouseIndex = Math.floor((mouseY - TIMELINE_CONFIG.topMargin) / TIMELINE_CONFIG.rowHeight);
-        if (mouseIndex < 0 || mouseIndex >= normalizedPoints.length - 1) return;
+        if (mouseIndex < 0 || mouseIndex >= normalized.length - 1) return;
 
         const p1 = {
-          x: scale(normalizedPoints[mouseIndex].normalizedValue || 0),
+          x: scale(normalized[mouseIndex].normalizedValue ?? 0),
           y: mouseIndex * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin,
         };
         const p2 = {
-          x: scale(normalizedPoints[mouseIndex + 1].normalizedValue || 0),
+          x: scale(normalized[mouseIndex + 1].normalizedValue ?? 0),
           y: (mouseIndex + 1) * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin,
         };
 
-        // Calculate distance from mouse to line segment
-        const lineLength = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
-        if (lineLength === 0) return;
-
+        const len = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2);
+        if (!len) return;
         const t = Math.max(
           0,
-          Math.min(1, ((mouseX - p1.x) * (p2.x - p1.x) + (mouseY - p1.y) * (p2.y - p1.y)) / (lineLength * lineLength))
+          Math.min(1, ((mouseX - p1.x) * (p2.x - p1.x) + (mouseY - p1.y) * (p2.y - p1.y)) / (len * len))
         );
-        const projectionX = p1.x + t * (p2.x - p1.x);
-        const projectionY = p1.y + t * (p2.y - p1.y);
-        const distance = Math.sqrt((mouseX - projectionX) ** 2 + (mouseY - projectionY) ** 2);
+        const projX = p1.x + t * (p2.x - p1.x);
+        const projY = p1.y + t * (p2.y - p1.y);
+        const dist = Math.sqrt((mouseX - projX) ** 2 + (mouseY - projY) ** 2);
 
-        if (distance < minLineDistance) {
-          minLineDistance = distance;
-          closestLine = {
-            distance,
-            config,
-            groupIndex,
-          } satisfies ClosestLine;
+        if (dist < minDist) {
+          minDist = dist;
+          closestLine = { distance: dist, config, groupIndex };
         }
       });
-
       if (closestLine && (closestLine as ClosestLine).distance < 50) {
         return {
           sensorId: (closestLine as ClosestLine).config.sensorId,
           groupIndex: (closestLine as ClosestLine).groupIndex,
         };
       }
-
       return null;
     },
-    [data, scales, getNormalizedData] // Remove selectedSensor from dependencies
+    [data, getNormalizedData, scales]
   );
 
-  // Update click handlers to use findClosestSensor
   const handleSvgClick = useCallback(
-    (event: React.MouseEvent<SVGElement>) => {
-      const svgElement = event.currentTarget;
-      const [mouseX, mouseY] = d3.pointer(event, svgElement);
+    (event: React.MouseEvent<SVGSVGElement>) => {
+      const svg = event.currentTarget;
+      const [mouseX, mouseY] = d3.pointer(event, svg);
       const closest = findClosestSensor(mouseX, mouseY);
-
       if (closest) {
         event.stopPropagation();
         handleSensorSelection(closest.sensorId);
@@ -732,106 +596,149 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
     [findClosestSensor, handleSensorSelection, handleDeselect, selectedSensor]
   );
 
-  // Update handleMouseMove to use findClosestSensor
   const handleMouseMove = useCallback(
     (event: React.MouseEvent<SVGSVGElement>) => {
       if (!dimensions) return;
-
-      const svgElement = event.currentTarget;
-      const [mouseX, mouseY] = d3.pointer(event, svgElement);
+      const svg = event.currentTarget;
+      const [mouseX, mouseY] = d3.pointer(event, svg);
       const closest = findClosestSensor(mouseX, mouseY);
-
       if (closest) {
-        const { sensorId } = closest;
-        const config = SENSOR_CONFIGS.find((c) => c.sensorId === sensorId);
+        const config = SENSOR_CONFIGS.find((c) => c.sensorId === closest.sensorId);
         if (!config) return;
+        const points = data[closest.sensorId] || [];
+        if (!points.length) return;
 
-        const points = data[sensorId] || [];
-        const normalizedPoints: DataPoint[] = getNormalizedData(points);
-        const scale = scales[sensorId];
-        if (!scale || normalizedPoints.length === 0) return;
+        const normalized = getNormalizedData(points);
+        const scale = scales[closest.sensorId];
+        if (!scale || !normalized.length) return;
 
-        // Find closest point for tooltip
         const mouseIndex = Math.floor((mouseY - TIMELINE_CONFIG.topMargin) / TIMELINE_CONFIG.rowHeight);
-        if (mouseIndex >= 0 && mouseIndex < normalizedPoints.length) {
-          const point = normalizedPoints[mouseIndex];
-          const tooltipWidth = 180;
-          const tooltipHeight = 80;
-          const viewportWidth = window.innerWidth;
-          const viewportHeight = window.innerHeight;
+        if (mouseIndex >= 0 && mouseIndex < normalized.length) {
+          const pt = normalized[mouseIndex];
+          const tooltipW = 180;
+          const tooltipH = 80;
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
 
-          let tooltipX = event.clientX + 10;
-          let tooltipY = event.clientY - tooltipHeight / 2;
+          let tX = event.clientX + 10;
+          let tY = event.clientY - tooltipH / 2;
+          if (tX + tooltipW > vw - 20) tX = event.clientX - tooltipW - 10;
+          if (tY + tooltipH > vh - 20) tY = vh - tooltipH - 20;
+          if (tY < 20) tY = 20;
 
-          if (tooltipX + tooltipWidth > viewportWidth - 20) {
-            tooltipX = event.clientX - tooltipWidth - 10;
-          }
-          if (tooltipY + tooltipHeight > viewportHeight - 20) {
-            tooltipY = viewportHeight - tooltipHeight - 20;
-          }
-          if (tooltipY < 20) {
-            tooltipY = 20;
-          }
-
-          // Only show tooltip if no sensor is selected or if hovering over the selected sensor
-          if (!selectedSensor || selectedSensor === sensorId) {
+          if (!selectedSensor || selectedSensor === closest.sensorId) {
             setTooltip({
-              x: tooltipX,
-              y: tooltipY,
-              value: point.value,
-              timestamp: point.timestamp,
-              sensorId,
+              x: tX,
+              y: tY,
+              value: pt.value,
+              timestamp: pt.timestamp,
+              sensorId: closest.sensorId,
               color: config.color,
               unit: config.unit,
               name: config.name,
             });
-
-            // Only update hover states if no sensor is selected
-            if (!selectedSensor) {
-              setHoveredSensor(sensorId);
-            }
+            if (!selectedSensor) setHoveredSensor(closest.sensorId);
           }
         }
       } else {
-        // Clear tooltip and hover states if not near any line and no sensor is selected
         if (!selectedSensor) {
           setTooltip(null);
           setHoveredSensor(null);
         }
       }
     },
-    [dimensions, scales, data, getNormalizedData, selectedSensor, findClosestSensor]
+    [dimensions, data, findClosestSensor, getNormalizedData, scales, selectedSensor]
   );
 
-  // Add effect to handle clicks outside the component
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (selectedSensor && containerRef.current && !containerRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (evt: MouseEvent) => {
+      if (selectedSensor && containerRef.current && !containerRef.current.contains(evt.target as Node)) {
         handleDeselect();
       }
     };
-
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [selectedSensor, handleDeselect]);
 
-  if (isLoading && Object.keys(data).length === 0) {
-    return (
-      <div ref={containerRef} className={styles.loadingContainer}>
-        <LoadingSpinner />
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!dimensions) return;
+    const svg = d3.select(containerRef.current).select("svg");
+    let sensorGroupsContainer = svg.select<SVGGElement>("g.sensor-groups");
 
-  if (error && Object.keys(data).length === 0) {
-    return (
-      <div ref={containerRef} className={styles.errorContainer}>
-        Error: {error}
-      </div>
-    );
-  }
+    if (sensorGroupsContainer.empty()) {
+      sensorGroupsContainer = svg.append("g").attr("class", "sensor-groups");
+    }
+
+    const sensorGroups = sensorGroupsContainer
+      .selectAll<SVGGElement, [string, DataPoint[]]>("g.sensor-group")
+      .data(Object.entries(data), ([sensorId]) => sensorId);
+
+    const enterGroups = sensorGroups
+      .enter()
+      .append("g")
+      .attr("class", "sensor-group")
+      .attr("data-sensor", ([sensorId]) => sensorId)
+      .style("opacity", 0);
+
+    enterGroups.append("path").attr("class", "sensor-line").attr("fill", "none").attr("stroke-width", 2);
+
+    const allGroups = enterGroups.merge(sensorGroups);
+
+    enterGroups.transition().duration(750).style("opacity", 1);
+
+    allGroups.each(function ([sensorId, points]) {
+      const group = d3.select(this);
+      const path = group.select<SVGPathElement>("path.sensor-line");
+      const normalizedPoints = getNormalizedData(points);
+      const config = SENSOR_CONFIGS.find((c) => c.sensorId === sensorId);
+      if (!config) return;
+
+      path
+        .attr("stroke", config.color)
+        .transition()
+        .duration(750)
+        .ease(d3.easeLinear)
+        .attr("d", createLine(sensorId, normalizedPoints));
+
+      const pointSelection = group
+        .selectAll<SVGCircleElement, DataPoint>("circle")
+        .data(normalizedPoints, (d) => d.timestamp.getTime().toString());
+
+      pointSelection.exit().transition().duration(500).style("opacity", 0).attr("r", 0).remove();
+
+      pointSelection
+        .transition()
+        .duration(750)
+        .ease(d3.easeLinear)
+        .style("opacity", 1)
+        .attr("cx", (d) => scales[sensorId](d.normalizedValue ?? 0))
+        .attr("cy", (_d, i) => i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin)
+        .attr("r", () => {
+          const isActive = selectedSensor === sensorId || hoveredSensor === sensorId;
+          return isActive ? 5 : config.priority === 1 ? 3 : 0;
+        });
+
+      pointSelection
+        .enter()
+        .append("circle")
+        .attr("fill", config.color)
+        .attr("r", 0)
+        .style("opacity", 0)
+        .attr("cx", (d) => scales[sensorId](d.normalizedValue ?? 0))
+        .attr("cy", (_d, i) => i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin)
+        .transition()
+        .duration(500)
+        .style("opacity", 1)
+        .attr("r", () => {
+          const isActive = selectedSensor === sensorId || hoveredSensor === sensorId;
+          return isActive ? 5 : config.priority === 1 ? 3 : 0;
+        });
+    });
+
+    sensorGroups.exit().transition().duration(350).style("opacity", 0).remove();
+  }, [data, dimensions, scales, getNormalizedData, createLine, selectedSensor, hoveredSensor]);
 
   return (
     <>
@@ -844,20 +751,18 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
           {Object.entries(SENSOR_GROUPS).map(([groupId, group]) => (
             <div key={groupId} className={styles.legendGroup}>
               <div className={styles.legendGroupHeader}>{group.name}</div>
-              {group.sensors.map((config) => (
+              {group.sensors.map((cfg) => (
                 <div
-                  key={config.sensorId}
+                  key={cfg.sensorId}
                   className={`${styles.legendItem} ${
-                    hoveredSensor === config.sensorId || selectedSensor === config.sensorId
-                      ? styles.legendItemActive
-                      : ""
+                    hoveredSensor === cfg.sensorId || selectedSensor === cfg.sensorId ? styles.legendItemActive : ""
                   }`}
-                  onClick={() => handleSensorSelection(config.sensorId)}
-                  onMouseEnter={() => handleSensorHover(config.sensorId)}
+                  onClick={() => handleSensorSelection(cfg.sensorId)}
+                  onMouseEnter={() => handleSensorHover(cfg.sensorId)}
                   onMouseLeave={() => handleSensorHover(null)}
                 >
-                  <div className={styles.legendColor} style={{ backgroundColor: config.color }} />
-                  <span>{config.name}</span>
+                  <div className={styles.legendColor} style={{ backgroundColor: cfg.color }} />
+                  <span>{cfg.name}</span>
                 </div>
               ))}
             </div>
@@ -866,15 +771,11 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
       </div>
 
       <div className={styles.scrollContainer} ref={scrollRef}>
-        {isLoading && Object.keys(data).length === 0 && (
-          <div className={styles.loadingContainer}>
-            <LoadingSpinner />
-          </div>
-        )}
         <div className={styles.scrollContent} ref={containerRef}>
           <div
             className={styles.timelineContent}
             style={{
+              backgroundColor: "transparent",
               height: `${
                 Math.max(...Object.values(data).map((points) => points.length - 1)) * TIMELINE_CONFIG.rowHeight +
                 TIMELINE_CONFIG.topMargin
@@ -890,27 +791,26 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
               onMouseMove={handleMouseMove}
               onClick={handleSvgClick}
               onMouseLeave={() => {
-                setTooltip(null);
                 if (!selectedSensor) {
+                  setTooltip(null);
                   setHoveredSensor(null);
                 }
               }}
               className={styles.timelineSvg}
+              style={{
+                backgroundColor: "transparent",
+              }}
             >
-              {/* Time indicators */}
               <g className={styles.timeIndicators}>
                 {Object.values(data)[0]?.map((point, i, arr) => {
                   const date = point.timestamp;
                   const prevDate = i > 0 ? arr[i - 1].timestamp : null;
                   const periodEmoji = point.period.toLowerCase() === "day" ? "☀️" : "🌙";
-
                   const showDate = i === 0 || date.getDate() !== prevDate?.getDate();
-
                   const yPos = i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin;
                   const isMobile = window.innerWidth < 768;
                   const leftMargin = isMobile ? TIMELINE_CONFIG.mobileLeftMargin : TIMELINE_CONFIG.leftMargin;
                   const xOffset = leftMargin - TIMELINE_CONFIG.timeIndicatorOffset;
-
                   const monthNames = [
                     "Jan",
                     "Feb",
@@ -925,7 +825,6 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                     "Nov",
                     "Dec",
                   ];
-
                   return (
                     <g key={i}>
                       {showDate && (
@@ -966,53 +865,6 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
                   );
                 })}
               </g>
-
-              {Object.values(SENSOR_GROUPS).flatMap((group) =>
-                group.sensors.map((config) => {
-                  const points = data[config.sensorId] || [];
-                  if (points.length === 0) return null;
-
-                  const normalizedPoints = getNormalizedData(points);
-                  const isActive = selectedSensor
-                    ? selectedSensor === config.sensorId
-                    : hoveredSensor === config.sensorId;
-
-                  // Adjust opacity based on priority when not active
-                  const baseOpacity = isActive ? 1 : Math.max(0.1, 1 - config.priority * 0.25);
-
-                  return (
-                    <g
-                      key={config.sensorId}
-                      className={styles.sensorGroup}
-                      onMouseEnter={() => handleSensorHover(config.sensorId)}
-                      onMouseLeave={() => handleSensorHover(null)}
-                    >
-                      <path
-                        d={createLine(config.sensorId, normalizedPoints)}
-                        stroke={config.color}
-                        style={{ opacity: baseOpacity }}
-                        className={`${styles.sensorLine} ${isActive ? styles.sensorLineActive : ""}`}
-                        onMouseEnter={() => handleSensorHover(config.sensorId)}
-                      />
-                      {(isActive || config.priority === 1) &&
-                        normalizedPoints.map((point, i) => (
-                          <circle
-                            key={i}
-                            cx={scales[config.sensorId](point.normalizedValue || 0)}
-                            cy={i * TIMELINE_CONFIG.rowHeight + TIMELINE_CONFIG.topMargin}
-                            r={isActive ? 5 : 3}
-                            style={{
-                              fill: config.color,
-                              opacity: baseOpacity,
-                            }}
-                            className={`${styles.dataPoint} ${isActive ? styles.dataPointActive : ""}`}
-                            onMouseEnter={() => handleSensorHover(config.sensorId)}
-                          />
-                        ))}
-                    </g>
-                  );
-                })
-              )}
             </svg>
           </div>
           <div ref={bottomTriggerRef} className={styles.scrollTrigger} />
@@ -1037,15 +889,16 @@ export const VerticalTimeline = ({ pageSize = 24, loadingBuffer = 1000 }: Timeli
               {`${tooltip.timestamp.getFullYear()}-${String(tooltip.timestamp.getMonth() + 1).padStart(
                 2,
                 "0"
-              )}-${String(tooltip.timestamp.getDate()).padStart(2, "0")} ${String(
-                tooltip.timestamp.getHours()
-              ).padStart(2, "0")}:${String(tooltip.timestamp.getMinutes()).padStart(2, "0")}`}
+              )}-${String(tooltip.timestamp.getDate()).padStart(2, "0")} 
+                ${String(tooltip.timestamp.getHours()).padStart(2, "0")}:
+                ${String(tooltip.timestamp.getMinutes()).padStart(2, "0")}`}
             </div>
           </div>
         )}
 
-        {isLoading && (
-          <div className={styles.loadingOverlay}>
+        {error && <div className={styles.errorOverlay}>Error: {error}</div>}
+        {(isLoading || isPreloading) && (
+          <div className={styles.loadingOverlay} style={{ backgroundColor: "rgba(0,0,0,0.2)" }}>
             <LoadingSpinner />
           </div>
         )}
