@@ -10,10 +10,37 @@
   display: flex;
   flex-direction: column;
   width: 100%;
+  position: relative;
 }
 
 .title {
-  margin: 0 0 1rem;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  background: var(--hover-emphasis);
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  pointer-events: none;
+  font-size: var(--font-size-lg);
+  color: var(--text-color);
+  text-align: center;
+  white-space: nowrap;
+  font-size: 2rem;
+}
+
+.wrapper:hover .title {
+  opacity: 1;
+  visibility: visible;
 }
 
 .loadingContainer,

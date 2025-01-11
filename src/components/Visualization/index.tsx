@@ -114,8 +114,8 @@ const Visualization = ({ column, title }: VisualizationProps) => {
   return (
     <section className='grid-item'>
       <div className={styles.wrapper}>
-        <h2 className={styles.title}>{title}</h2>
         <div className={styles.container}>
+          <h2 className={styles.title}>{title}</h2>
           <Canvas
             style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
             orthographic
