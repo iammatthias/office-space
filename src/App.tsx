@@ -21,6 +21,7 @@ function App() {
       </p>
 
       <p>The database updates every minute (minus the occasional hiccup), and each sensor is rendered below.</p>
+      <p>When a data point is missing, it is rendered as the minimum value.</p>
 
       <ul>
         <li>BME280: Temperature (-40°C to 85°C), Humidity (0-100%), and Pressure (300-1100 hPa)</li>
@@ -34,6 +35,9 @@ function App() {
         <Visualization column='temp' title='Temperature' />
         <Visualization column='lux' title='Lux' />
         <Visualization column='hum' title='Humidity' />
+        <Visualization column='gas' title='VOC' />
+        <Visualization column='uv' title='UV' />
+        <Visualization column='pressure' title='Pressure' />
       </main>
 
       {/* <VerticalTimeline pageSize={12} /> */}
