@@ -32,12 +32,12 @@ function App() {
       </ul>
 
       <main className='grid'>
-        <Visualization column='temp' title='Temperature' />
-        <Visualization column='lux' title='Lux' />
-        <Visualization column='hum' title='Humidity' />
-        <Visualization column='gas' title='VOC' />
-        <Visualization column='uv' title='UV' />
-        <Visualization column='pressure' title='Pressure' />
+        <Visualization column='temp' title='Temperature' colorScheme='redblue' />
+        <Visualization column='lux' title='Lux' colorScheme='base' />
+        <Visualization column='hum' title='Humidity' colorScheme='cyan' />
+        <Visualization column='gas' title='VOC' colorScheme='yellow' />
+        <Visualization column='uv' title='UV' colorScheme='purple' />
+        <Visualization column='pressure' title='Pressure' colorScheme='green' />
       </main>
 
       {/* <VerticalTimeline pageSize={12} /> */}

@@ -11,9 +11,10 @@ const CANVAS_HEIGHT = 365 * 5;
 interface VisualizationProps {
   column: string;
   title: string;
+  colorScheme: string;
 }
 
-const Visualization = ({ column, title }: VisualizationProps) => {
+const Visualization = ({ column, title, colorScheme }: VisualizationProps) => {
   const { data, loading, error } = useEnvironmentalData(column);
 
   const geometry = useMemo(() => {
@@ -91,7 +92,7 @@ const Visualization = ({ column, title }: VisualizationProps) => {
           }
         }
 
-        const colorHex = getColorFor(value, minValue, maxValue, column);
+        const colorHex = getColorFor(value, minValue, maxValue, colorScheme);
         const color = new THREE.Color(colorHex);
         for (let i = 0; i < 4; i++) colors.push(color.r, color.g, color.b);
 

@@ -1,22 +1,7 @@
 import { EnvironmentalData } from "../../hooks/useEnvironmentalData";
 
-const COLOR_SCHEMES = {
-  hum: [
-    "#DDF1E4",
-    "#BFE8D9",
-    "#A2DECE",
-    "#87D3C3",
-    "#5ABDAC",
-    "#3AA99F",
-    "#2F968D",
-    "#24837B",
-    "#1C6C66",
-    "#164F4A",
-    "#143F3C",
-    "#122F2C",
-    "#101F1D",
-  ],
-  temperature: [
+export const COLOR_SCHEMES = {
+  redblue: [
     // Blue scale (cold to neutral)
     "#101A24", // Darkest blue
     "#133051",
@@ -44,7 +29,50 @@ const COLOR_SCHEMES = {
     "#551B18",
     "#261312", // Darkest red
   ],
-  lux: [
+  cyan: [
+    "#DDF1E4",
+    "#BFE8D9",
+    "#A2DECE",
+    "#87D3C3",
+    "#5ABDAC",
+    "#3AA99F",
+    "#2F968D",
+    "#24837B",
+    "#1C6C66",
+    "#164F4A",
+    "#143F3C",
+    "#122F2C",
+    "#101F1D",
+  ],
+  blue: [
+    "#E1ECEB",
+    "#C6DDE8",
+    "#ABCFE2",
+    "#92BFDB",
+    "#66A0C8",
+    "#4385BE",
+    "#3171B2",
+    "#205EA6",
+    "#1A4F8C",
+    "#163B66",
+    "#133051",
+    "#101A24",
+  ],
+  red: [
+    "#FFE1D5",
+    "#FFCABB",
+    "#FDB2A2",
+    "#F89A8A",
+    "#E8705F",
+    "#D14D41",
+    "#C03E35",
+    "#AF3029",
+    "#942822",
+    "#6C201C",
+    "#551B18",
+    "#261312",
+  ],
+  base: [
     "#F2F0E5",
     "#E6E4D9",
     "#DAD8CE",
@@ -59,7 +87,7 @@ const COLOR_SCHEMES = {
     "#282726",
     "#1C1B1A",
   ],
-  gas: [
+  yellow: [
     "#FAEEC6",
     "#F6E2A8",
     "#F1D67E",
@@ -74,7 +102,7 @@ const COLOR_SCHEMES = {
     "#3A2D04",
     "#241E08",
   ],
-  uv: [
+  purple: [
     "#F0EAEC",
     "#E2D9E9",
     "#D3CAE6",
@@ -89,7 +117,7 @@ const COLOR_SCHEMES = {
     "#1A1623",
     "#1A1623",
   ],
-  pressure: [
+  green: [
     "#EDEECF",
     "#DDE2B2",
     "#CDD597",
@@ -114,7 +142,7 @@ export const getColorFor = (value: number, min: number, max: number, column: str
   const [dataType] = column.toLowerCase().split("_");
 
   // Get the appropriate color scheme
-  const colorScheme = COLOR_SCHEMES[dataType as keyof typeof COLOR_SCHEMES] || COLOR_SCHEMES.temperature;
+  const colorScheme = COLOR_SCHEMES[dataType as keyof typeof COLOR_SCHEMES] || COLOR_SCHEMES.redblue;
 
   // Calculate the index in the color array
   const index = Math.min(Math.floor(normalizedValue * (colorScheme.length - 1)), colorScheme.length - 1);
