@@ -11,15 +11,16 @@ interface VisualizationProps {
 export default function Visualization_v2({ sensor, timePeriod = "minute" }: VisualizationProps) {
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [currentTimePeriod, setCurrentTimePeriod] = useState<TimePeriod>(timePeriod);
 
   useEffect(() => {
-    async function fetchData() {
-      const url = `https://image-api.office.pure---internet.com/?type=${timePeriod}&sensor=${sensor}`;
+    async function fetchData(period: TimePeriod) {
+      const url = `https://image-api.office.pure---internet.com/?type=${period}&sensor=${sensor}`;
 
       try {
         const response = await fetch(url, {
           method: "GET",
-          mode: "cors", // Explicitly enable CORS
+          mode: "cors",
           headers: {
             "Content-Type": "application/json",
           },
@@ -30,22 +31,26 @@ export default function Visualization_v2({ sensor, timePeriod = "minute" }: Visu
         }
 
         const data = await response.json();
-        const path = data[`latest_${sensor}_${timePeriod}`]?.value?.path;
-
-        console.log(data);
+        const path = data[`latest_${sensor}_${period}`]?.value?.path;
 
         if (!path) {
           throw new Error("Image path not found in response");
         }
 
         setImagePath(path);
+        setError(null);
       } catch (err) {
+        if (period === "minute") {
+          console.log("Minute data not available, falling back to daily");
+          setCurrentTimePeriod("daily");
+          return fetchData("daily");
+        }
         setError(err instanceof Error ? err : new Error("Failed to fetch data"));
       }
     }
 
-    fetchData();
-  }, [sensor, timePeriod]);
+    fetchData(currentTimePeriod);
+  }, [sensor, currentTimePeriod]);
 
   if (error) return <div className={styles.error}>Error loading data: {error.message}</div>;
   if (!imagePath) return <div className={styles.loading}>Loading...</div>;
