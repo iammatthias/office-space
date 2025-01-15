@@ -8,7 +8,7 @@ interface VisualizationProps {
   timePeriod?: TimePeriod;
 }
 
-export default function Visualization_v2({ sensor, timePeriod = "daily" }: VisualizationProps) {
+export default function Visualization_v2({ sensor, timePeriod = "minute" }: VisualizationProps) {
   const [imagePath, setImagePath] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
