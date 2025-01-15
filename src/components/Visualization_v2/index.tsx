@@ -30,7 +30,9 @@ export default function Visualization_v2({ sensor, timePeriod = "minute" }: Visu
         }
 
         const data = await response.json();
-        const path = data[`latest_${sensor}_${timePeriod}`]?.value;
+        const path = data[`latest_${sensor}_${timePeriod}`]?.value?.path;
+
+        console.log(data);
 
         if (!path) {
           throw new Error("Image path not found in response");
