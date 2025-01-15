@@ -1,5 +1,6 @@
 // import { VerticalTimeline } from "./components/VerticalTimeline";
-import Visualization from "./components/Visualization";
+// import Visualization from "./components/Visualization";
+import Visualization_v2 from "./components/Visualization_v2";
 
 function App() {
   return (
@@ -20,8 +21,19 @@ function App() {
         tracks the enviromental conditions of my office.
       </p>
 
-      <p>The database updates every minute (minus the occasional hiccup), and each sensor is rendered below.</p>
-      <p>When a data point is missing, it is rendered as the minimum value.</p>
+      <p>
+        The database updates every minute (minus the occasional hiccup). When a data point is missing, it is rendered as
+        the minimum value.
+      </p>
+
+      <p>
+        The images are rendered using pathlib and python in batches and stored in a Cloudflare R2 bucket and proxied
+        through{" "}
+        <a href='https://wsrv.nl/' target='_blank' rel='noopener noreferrer'>
+          wsrv.nl
+        </a>
+        .
+      </p>
 
       <ul>
         <li>BME280: Temperature (-40°C to 85°C), Humidity (0-100%), and Pressure (300-1100 hPa)</li>
@@ -32,12 +44,18 @@ function App() {
       </ul>
 
       <main className='grid'>
-        <Visualization column='temp' title='Temperature' colorScheme='redblue' />
+        {/* <Visualization column='temp' title='Temperature' colorScheme='redblue' />
         <Visualization column='lux' title='Lux' colorScheme='base' />
         <Visualization column='hum' title='Humidity' colorScheme='cyan' />
         <Visualization column='gas' title='VOC' colorScheme='yellow' />
         <Visualization column='uv' title='UV' colorScheme='purple' />
-        <Visualization column='pressure' title='Pressure' colorScheme='green' />
+        <Visualization column='pressure' title='Pressure' colorScheme='green' /> */}
+        <Visualization_v2 sensor='temperature' />
+        <Visualization_v2 sensor='light' />
+        <Visualization_v2 sensor='humidity' />
+        <Visualization_v2 sensor='gas' />
+        <Visualization_v2 sensor='uv' />
+        <Visualization_v2 sensor='pressure' />
       </main>
 
       {/* <VerticalTimeline pageSize={12} /> */}
