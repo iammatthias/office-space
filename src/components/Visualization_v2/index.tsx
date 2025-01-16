@@ -56,7 +56,7 @@ export default function Visualization_v2({ sensor, timePeriod = "minute" }: Visu
   if (!imagePath) return <div className={styles.loading}>Loading...</div>;
 
   const imageUrl = `https://bucket.office.pure---internet.com/${imagePath}`;
-  const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(imageUrl)}&w=1200&fit=contain&output=webp`;
+  const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(imageUrl)}&w=800&fit=contain&output=webp`;
 
   return <img src={proxyUrl} alt={`${sensor} visualization`} className={styles.image} loading='lazy' />;
 }
