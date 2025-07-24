@@ -3,6 +3,9 @@
   height: 100%;
   object-fit: cover;
   border: 1px solid var(--text-color);
+  will-change: opacity;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .loading,
@@ -37,19 +40,58 @@
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--text-color);
   transition: all 0.2s ease;
+  position: relative;
+  will-change: transform, opacity;
 }
 
 .toggleButton:hover {
   color: #374151;
   background-color: #f3f4f6;
+  transform: translateY(-1px);
 }
 
 .toggleButton.active {
   color: #3b82f6;
   font-weight: 500;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
 .toggleButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
+}
+
+.toggleButton.loading {
+  position: relative;
+  color: #6b7280;
+}
+
+.toggleButton.loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-top: -0.375rem;
+  border: 1px solid #6b7280;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.toggleButton.error {
+  color: #dc2626;
+  border-color: #dc2626;
+}
+
+.toggleButton.error:hover {
+  background-color: #fef2f2;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

@@ -105,10 +105,10 @@ function App() {
         </p>
 
         <p>
-          Data updates every minute. Missing data points are rendered as minimum values. Images are generated with
-          Python and served via{" "}
-          <a href='https://wsrv.nl/' target='_blank' rel='noopener noreferrer'>
-            wsrv.nl
+          Data updates every minute. Missing data points are rendered as the nearest values. Images are generated
+          locally and pinned on{" "}
+          <a href='https://pinata.cloud/' target='_blank' rel='noopener noreferrer'>
+            Pinata
           </a>
           .
         </p>
