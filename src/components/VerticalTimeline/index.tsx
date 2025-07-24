@@ -733,7 +733,7 @@ export const VerticalTimeline = ({ height = 600 }) => {
         console.log("🔄 Zoom event triggered:", { x: transform.x, y: transform.y, k: transform.k });
 
         // Calculate new time range based on zoom transform
-        const { width, height, margin } = dimensions;
+        const { width, margin } = dimensions;
         const chartWidth = width - margin.left - margin.right;
 
         // Create a scale that maps the full time range to the chart area
@@ -840,7 +840,7 @@ export const VerticalTimeline = ({ height = 600 }) => {
         const svg = d3.select(svgRef.current);
         // Calculate appropriate transform for this time range
         const timeRange = fullTimeRange;
-        const { width, height, margin } = dimensions;
+        const { width, margin } = dimensions;
         const chartWidth = width - margin.left - margin.right;
 
         const xScale = d3
