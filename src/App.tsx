@@ -1,64 +1,171 @@
+import { useState } from "react";
+import Visualization from "./components/Visualization";
 // import { VerticalTimeline } from "./components/VerticalTimeline";
-// import Visualization from "./components/Visualization";
-import Visualization_v2 from "./components/Visualization_v2";
 
 function App() {
+  const [isSensorsExpanded, setIsSensorsExpanded] = useState(false);
+
+  // const [currentPage, setCurrentPage] = useState<"home" | "timeline">("home");
+
+  // useEffect(() => {
+  //   // Handle hash-based routing
+  //   const handleHashChange = () => {
+  //     const hash = window.location.hash.slice(1);
+  //     if (hash === "timeline") {
+  //       setCurrentPage("timeline");
+  //     } else {
+  //       setCurrentPage("home");
+  //     }
+  //   };
+
+  //   // Set initial page based on hash
+  //   handleHashChange();
+
+  //   // Listen for hash changes
+  //   window.addEventListener("hashchange", handleHashChange);
+  //   return () => window.removeEventListener("hashchange", handleHashChange);
+  // }, []);
+
+  // const navigateTo = (page: "home" | "timeline") => {
+  //   setCurrentPage(page);
+  //   if (page === "timeline") {
+  //     window.location.hash = "timeline";
+  //   } else {
+  //     window.location.hash = "";
+  //   }
+  // };
+
+  // if (currentPage === "timeline") {
+  //   return (
+  //     <>
+  //       <header>
+  //         <div className='header-content'>
+  //           <h1>
+  //             <img src='/favicon.png' alt='icon' />
+  //             office---space
+  //           </h1>
+  //           <button onClick={() => navigateTo("home")} className='nav-button'>
+  //             ← Home
+  //           </button>
+  //         </div>
+  //       </header>
+
+  //       <section className='timeline'>
+  //         <VerticalTimeline />
+  //       </section>
+
+  //       <footer>
+  //         <p>View the code on GitHub</p>
+  //         <ul>
+  //           <li>
+  //             <a href='https://github.com/iammatthias/office-space' target='_blank' rel='noopener noreferrer'>
+  //               Frontend
+  //             </a>
+  //           </li>
+  //           <li>
+  //             <a href='https://github.com/iammatthias/office-space-db' target='_blank' rel='noopener noreferrer'>
+  //               Backend
+  //             </a>
+  //           </li>
+  //         </ul>
+  //       </footer>
+  //     </>
+  //   );
+  // }
+
   return (
     <>
-      <h1>
-        <img src='/favicon.png' alt='icon' />
-        office---space
-      </h1>
-      <p>
-        A{" "}
-        <a href='https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/' target='_blank' rel='noopener noreferrer'>
-          Raspberry Pi Zero 2 W
-        </a>{" "}
-        with a{" "}
-        <a href='https://www.waveshare.com/wiki/Environment_Sensor_HAT' target='_blank' rel='noopener noreferrer'>
-          Waveshare Environment Sensor HAT
-        </a>{" "}
-        tracks the enviromental conditions of my office.
-      </p>
+      <header>
+        <div className='header-content'>
+          <h1>
+            <img src='/favicon.png' alt='icon' />
+            office---space
+          </h1>
+          {/* <button onClick={() => navigateTo("timeline")} className='nav-button'>
+            Timeline →
+          </button> */}
+        </div>
+      </header>
 
-      <p>
-        The database updates every minute (minus the occasional hiccup). When a data point is missing, it is rendered as
-        the minimum value.
-      </p>
+      <section className='intro'>
+        <p>
+          A{" "}
+          <a
+            href='https://www.raspberrypi.com/products/raspberry-pi-zero-2-w/'
+            target='_blank'
+            rel='noopener noreferrer'
+          >
+            Raspberry Pi Zero 2 W
+          </a>{" "}
+          with a{" "}
+          <a href='https://www.waveshare.com/wiki/Environment_Sensor_HAT' target='_blank' rel='noopener noreferrer'>
+            Waveshare Environment Sensor HAT
+          </a>{" "}
+          tracks the environmental conditions of my office.
+        </p>
 
-      <p>
-        The images are rendered using pathlib and python in batches and stored in a Cloudflare R2 bucket and proxied
-        through{" "}
-        <a href='https://wsrv.nl/' target='_blank' rel='noopener noreferrer'>
-          wsrv.nl
-        </a>
-        .
-      </p>
+        <p>
+          Data updates every minute. Missing data points are rendered as minimum values. Images are generated with
+          Python and served via{" "}
+          <a href='https://wsrv.nl/' target='_blank' rel='noopener noreferrer'>
+            wsrv.nl
+          </a>
+          .
+        </p>
+      </section>
 
-      <ul>
-        <li>BME280: Temperature (-40°C to 85°C), Humidity (0-100%), and Pressure (300-1100 hPa)</li>
-        <li>TSL25911: Ambient Light (0-88,000 Lux)</li>
-        <li>LTR390: UV Light (280-430nm wavelength)</li>
-        <li>SGP40: VOC Air Quality (0-1,000 ppm)</li>
-        <li>ICM20948: 9-DOF Motion (Accelerometer, Gyroscope, Magnetometer)</li>
-      </ul>
+      <section className='sensors'>
+        <h2>Sensors</h2>
+        <button
+          className='sensors-toggle'
+          onClick={() => setIsSensorsExpanded(!isSensorsExpanded)}
+          aria-expanded={isSensorsExpanded}
+          aria-controls='sensors-content'
+        >
+          {isSensorsExpanded ? "Hide" : "Show"} sensors
+          <span className='toggle-icon' aria-hidden='true'>
+            {isSensorsExpanded ? "−" : "+"}
+          </span>
+        </button>
+        <div
+          id='sensors-content'
+          className={`sensor-grid ${isSensorsExpanded ? "expanded" : "collapsed"}`}
+          aria-hidden={!isSensorsExpanded}
+        >
+          <div className='sensor-item'>
+            <span className='sensor-name'>BME280</span>
+            <span className='sensor-desc'>Temperature, Humidity, Pressure</span>
+          </div>
+          <div className='sensor-item'>
+            <span className='sensor-name'>TSL25911</span>
+            <span className='sensor-desc'>Ambient Light (0-88,000 Lux)</span>
+          </div>
+          <div className='sensor-item'>
+            <span className='sensor-name'>LTR390</span>
+            <span className='sensor-desc'>UV Light (280-430nm)</span>
+          </div>
+          <div className='sensor-item'>
+            <span className='sensor-name'>SGP40</span>
+            <span className='sensor-desc'>VOC Air Quality (0-1,000 ppm)</span>
+          </div>
+          <div className='sensor-item'>
+            <span className='sensor-name'>ICM20948</span>
+            <span className='sensor-desc'>9-DOF Motion Sensor</span>
+          </div>
+        </div>
+      </section>
 
-      <main className='grid'>
-        {/* <Visualization column='temp' title='Temperature' colorScheme='redblue' />
-        <Visualization column='lux' title='Lux' colorScheme='base' />
-        <Visualization column='hum' title='Humidity' colorScheme='cyan' />
-        <Visualization column='gas' title='VOC' colorScheme='yellow' />
-        <Visualization column='uv' title='UV' colorScheme='purple' />
-        <Visualization column='pressure' title='Pressure' colorScheme='green' /> */}
-        <Visualization_v2 sensor='temperature' />
-        <Visualization_v2 sensor='light' />
-        <Visualization_v2 sensor='humidity' />
-        <Visualization_v2 sensor='gas' />
-        <Visualization_v2 sensor='uv' />
-        <Visualization_v2 sensor='pressure' />
-      </main>
-
-      {/* <VerticalTimeline pageSize={12} /> */}
+      <section className='visualizations'>
+        {/* <h2>Current Readings</h2> */}
+        <main className='grid'>
+          <Visualization sensor='temperature' />
+          <Visualization sensor='light' />
+          <Visualization sensor='humidity' />
+          <Visualization sensor='gas' />
+          <Visualization sensor='uv' />
+          <Visualization sensor='pressure' />
+        </main>
+      </section>
 
       <footer>
         <p>View the code on GitHub</p>

@@ -1,147 +1,107 @@
-import { Canvas } from "@react-three/fiber";
-import { useEnvironmentalData } from "../../hooks/useEnvironmentalData";
-import { getColorFor, organizeDataByDay, getRange } from "./utils";
+import { useState, useEffect } from "react";
 import styles from "./Visualization.module.css";
-import { useMemo } from "react";
-import * as THREE from "three";
 
-const MINUTES_IN_DAY = 1440;
-const CANVAS_HEIGHT = 365 * 5;
+type TimePeriod = "daily" | "hourly" | "cumulative";
 
 interface VisualizationProps {
-  column: string;
-  title: string;
-  colorScheme: string;
+  sensor: "gas" | "humidity" | "light" | "pressure" | "temperature" | "uv";
 }
 
-const Visualization = ({ column, title, colorScheme }: VisualizationProps) => {
-  const { data, loading, error } = useEnvironmentalData(column);
+export default function Visualization_v2({ sensor }: VisualizationProps) {
+  const [cid, setCID] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [currentTimePeriod, setCurrentTimePeriod] = useState<TimePeriod>("cumulative");
+  const [isLoading, setIsLoading] = useState(false);
 
-  const geometry = useMemo(() => {
-    if (!data.length) return null;
+  useEffect(() => {
+    async function fetchData(period: TimePeriod) {
+      setIsLoading(true);
+      const url = `https://image-api.office.pure---internet.com/?type=${period}&sensor=${sensor}`;
 
-    const days = organizeDataByDay(data);
-    const numDays = Math.min(days.length, 365);
-    const rowHeight = CANVAS_HEIGHT / numDays;
+      try {
+        const response = await fetch(url, {
+          method: "GET",
+          mode: "cors",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
 
-    // Calculate range for the entire dataset
-    const { min: minValue, max: maxValue } = getRange(data);
-
-    const vertices: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-
-    days.slice(0, numDays).forEach((dayData, dayIndex) => {
-      const y = CANVAS_HEIGHT - (dayIndex + 1) * rowHeight;
-      const minuteMap = new Map<number, number>();
-
-      dayData.forEach((entry) => {
-        const minutes = entry.time.getHours() * 60 + entry.time.getMinutes();
-        minuteMap.set(minutes, entry.value);
-      });
-
-      // Find the first and last minutes with data for this day
-      let firstMinute = MINUTES_IN_DAY;
-      let lastMinute = 0;
-      minuteMap.forEach((_, minute) => {
-        firstMinute = Math.min(firstMinute, minute);
-        lastMinute = Math.max(lastMinute, minute);
-      });
-
-      for (let minute = 0; minute < MINUTES_IN_DAY; minute++) {
-        vertices.push(minute, y, 0, minute + 1, y, 0, minute + 1, y + rowHeight, 0, minute, y + rowHeight, 0);
-
-        let value: number;
-        if (minuteMap.has(minute)) {
-          value = minuteMap.get(minute)!;
-        } else {
-          // Find nearest known values before and after current minute
-          let beforeMinute = minute - 1;
-          let afterMinute = minute + 1;
-          let beforeValue: number | undefined;
-          let afterValue: number | undefined;
-
-          while (beforeMinute >= firstMinute) {
-            if (minuteMap.has(beforeMinute)) {
-              beforeValue = minuteMap.get(beforeMinute);
-              break;
-            }
-            beforeMinute--;
-          }
-
-          while (afterMinute <= lastMinute) {
-            if (minuteMap.has(afterMinute)) {
-              afterValue = minuteMap.get(afterMinute);
-              break;
-            }
-            afterMinute++;
-          }
-
-          if (beforeValue !== undefined && afterValue !== undefined) {
-            // Interpolate between known values
-            const range = afterMinute - beforeMinute;
-            const weight = (minute - beforeMinute) / range;
-            value = beforeValue + (afterValue - beforeValue) * weight;
-          } else if (beforeValue !== undefined) {
-            value = beforeValue;
-          } else if (afterValue !== undefined) {
-            value = afterValue;
-          } else {
-            // If no data available for this day, use the average value
-            value = (minValue + maxValue) / 2;
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        const colorHex = getColorFor(value, minValue, maxValue, colorScheme);
-        const color = new THREE.Color(colorHex);
-        for (let i = 0; i < 4; i++) colors.push(color.r, color.g, color.b);
+        const data = await response.json();
+        const sensorData = data[`${sensor}:${period}:latest`];
 
-        const vertexIndex = (dayIndex * MINUTES_IN_DAY + minute) * 4;
-        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2, vertexIndex, vertexIndex + 2, vertexIndex + 3);
+        if (!sensorData?.ipfs_url) {
+          throw new Error("IPFS URL not found in response");
+        }
+
+        // Extract CID from ipfs:// URL (e.g., "ipfs://bafkreie3lwdbnx4rysfqiul5a62v62gft74fwjwxfcp6qmzxrvaifeszhq")
+        const ipfsUrl = sensorData.ipfs_url;
+        const extractedCID = ipfsUrl.replace("ipfs://", "");
+
+        if (!extractedCID) {
+          throw new Error("Invalid IPFS URL format");
+        }
+
+        setCID(extractedCID);
+        setError(null);
+      } catch (err) {
+        if (period === "cumulative") {
+          console.log("Cumulative data not available, falling back to daily");
+          setCurrentTimePeriod("daily");
+          return fetchData("daily");
+        }
+        setError(err instanceof Error ? err : new Error("Failed to fetch data"));
+      } finally {
+        setIsLoading(false);
       }
-    });
+    }
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
+    fetchData(currentTimePeriod);
+  }, [sensor, currentTimePeriod]);
 
-    return geometry;
-  }, [data, column]);
+  const handleTimePeriodChange = (period: TimePeriod) => {
+    setCurrentTimePeriod(period);
+  };
 
-  if (loading) return <div className={styles.loadingContainer}>Loading...</div>;
-  if (error) return <div className={styles.errorContainer}>Error: {error.message}</div>;
+  if (error) return <div className={styles.error}>Error loading data: {error.message}</div>;
+  if (!cid && !isLoading) return <div className={styles.loading}>Loading...</div>;
+
+  const imageUrl = `https://cdn.iammatthias.com/ipfs/${cid}?img-width=800&img-height=600&img-fit=contain&img-format=webp&img-quality=85&img-dpr=2&img-onerror=redirect`;
 
   return (
-    <section className='grid-item'>
-      <div className={styles.wrapper}>
-        <div className={styles.container}>
-          <h2 className={styles.title}>{title}</h2>
-          <Canvas
-            style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
-            orthographic
-            camera={{
-              position: [0, 0, 1],
-              left: 0,
-              right: MINUTES_IN_DAY,
-              top: CANVAS_HEIGHT,
-              bottom: 0,
-              near: 0.1,
-              far: 1000,
-              zoom: 1,
-            }}
-          >
-            {geometry && (
-              <mesh>
-                <primitive object={geometry} attach='geometry' />
-                <meshBasicMaterial vertexColors side={THREE.DoubleSide} transparent />
-              </mesh>
-            )}
-          </Canvas>
-        </div>
+    <div className={styles.container}>
+      {isLoading ? (
+        <div className={styles.loading}>Loading...</div>
+      ) : (
+        <img src={imageUrl} alt={`${sensor} visualization`} className={styles.image} loading='lazy' />
+      )}
+      <div className={styles.toggleContainer}>
+        <button
+          className={`${styles.toggleButton} ${currentTimePeriod === "daily" ? styles.active : ""}`}
+          onClick={() => handleTimePeriodChange("daily")}
+          disabled={isLoading}
+        >
+          Daily
+        </button>
+        <button
+          className={`${styles.toggleButton} ${currentTimePeriod === "hourly" ? styles.active : ""}`}
+          onClick={() => handleTimePeriodChange("hourly")}
+          disabled={isLoading}
+        >
+          Hourly
+        </button>
+        <button
+          className={`${styles.toggleButton} ${currentTimePeriod === "cumulative" ? styles.active : ""}`}
+          onClick={() => handleTimePeriodChange("cumulative")}
+          disabled={isLoading}
+        >
+          Cumulative
+        </button>
       </div>
-    </section>
+    </div>
   );
-};
-
-export default Visualization;
+}
