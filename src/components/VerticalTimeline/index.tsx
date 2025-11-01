@@ -790,9 +790,7 @@ export const VerticalTimeline = () => {
       ? { top: 0, right: 20, bottom: 0, left: 60 }
       : { top: 0, right: 30, bottom: 0, left: 80 };
 
-    // Responsive width: full viewport width with minimal margins
-    const chartContentPadding = 0; // No padding on chartContent
-    const maxAvailableWidth = windowWidth - chartContentPadding;
+    // Responsive width: full viewport width
     const chartWidth = isMobile
       ? Math.max(320, windowWidth)
       : Math.min(windowWidth, Math.max(800, windowWidth));
