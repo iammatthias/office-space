@@ -1,412 +1,267 @@
-.timelineContainer {
+.container {
   width: 100%;
-  height: 80vh;
   display: flex;
   flex-direction: column;
   background: var(--background-color);
-  border-radius: 0.5rem;
-  overflow: hidden;
-  box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+/* Controls - minimal and functional */
+.controls {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--background-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.controlsHeader {
+  padding: 1rem 1.5rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: var(--text-color);
+  letter-spacing: 0;
+}
+
+.dateRange {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.dateRangeLabel {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+.dateRangeText {
+  color: var(--text-primary);
+  font-weight: 400;
+  font-family: monospace;
+}
+
+.controlsBody {
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.controlGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.controlLabel {
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.dateButtons {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.dateButton {
+  padding: 0.25rem 0.625rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid transparent;
+  border-radius: 0;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s;
+  font-family: inherit;
   position: relative;
 }
 
-.header {
+.dateButton:hover {
+  color: var(--text-primary);
+}
+
+.dateButtonActive {
+  color: var(--text-primary);
+  border-bottom-color: var(--text-primary);
+  /* Flexoki blue gradient */
+  background: linear-gradient(180deg, transparent 0%, rgba(49, 113, 178, 0.06) 100%);
+}
+
+.sensorLegend {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.sensorButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s;
+  font-family: inherit;
+}
+
+.sensorButton:hover {
+  color: var(--text-primary);
+}
+
+.sensorButtonActive {
+  color: var(--text-primary);
+  /* Flexoki blue gradient - subtle */
+  background: linear-gradient(180deg, rgba(49, 113, 178, 0.05) 0%, rgba(49, 113, 178, 0.01) 100%);
+}
+
+.sensorButtonInactive {
+  opacity: 0.4;
+}
+
+.sensorColor {
+  width: 8px;
+  height: 8px;
+  border-radius: 0;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+
+.checkmark {
+  display: none;
+}
+
+/* Chart content - minimal */
+.chartContent {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  background: var(--background-color);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.chartWrapper {
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  background: var(--background-color);
+}
+
+.chartSvg {
+  display: block;
+  flex-shrink: 0;
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* Tooltip - minimal and functional */
+.tooltip {
+  background: var(--background-color);
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  min-width: 180px;
+}
+
+.tooltipDate {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  font-family: monospace;
+}
+
+.tooltipItem {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+  padding: 0.125rem 0;
+  font-size: 0.8125rem;
+  gap: 1rem;
 }
 
-.headerButtons {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.loadButton {
-  padding: 0.5rem 1rem;
-  background: #28a745;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.loadButton:hover:not(:disabled) {
-  background: #218838;
-}
-
-.loadButton:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-}
-
-.header h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #212529;
-}
-
-.instructions {
-  font-size: 0.75rem;
-  color: #6c757d;
-  margin-top: 0.25rem;
-}
-
-.instructions span {
-  font-style: italic;
-}
-
-.zoomInfo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.875rem;
-  color: #6c757d;
-}
-
-.zoomInfo span {
-  font-weight: 500;
-}
-
-.refreshButton {
-  padding: 0.5rem 1rem;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.refreshButton:hover:not(:disabled) {
-  background: #0056b3;
-}
-
-.refreshButton:disabled {
-  background: #6c757d;
-  cursor: not-allowed;
-}
-
-.chartContainer {
-  flex: 1;
-  position: relative;
-  overflow: hidden; /* Changed back to hidden to prevent overflow */
-  background: var(--background-color);
-  /* Ensure chart stays within bounds */
-  min-height: 0;
-  min-width: 0;
-  /* Add border for debugging */
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-}
-
-.chartContainer.zooming {
-  cursor: grabbing;
-}
-
-.zoomIndicator {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: rgba(0, 123, 255, 0.9);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  z-index: 10;
-  pointer-events: none;
-  animation: fadeInOut 0.3s ease;
-}
-
-@keyframes fadeInOut {
-  0% {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.chartContainer svg {
-  width: 100%;
-  height: 100%;
-  cursor: grab;
-  /* Ensure SVG stays within container bounds */
-  overflow: hidden;
-  /* Enable pointer events for interaction */
-  pointer-events: all;
-  /* Prevent text selection during interaction */
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  /* Ensure SVG doesn't exceed container */
-  max-width: 100%;
-  max-height: 100%;
-}
-
-.chartContainer svg:active {
-  cursor: grabbing;
-}
-
-/* Ensure chart group stays anchored and interactive */
-.chart-group {
-  transform-origin: center;
-  pointer-events: all;
-}
-
-/* Make sensor lines interactive */
-.sensor-line {
-  transition: stroke-width 0.2s ease, opacity 0.2s ease;
-  pointer-events: all;
-  cursor: pointer;
-}
-
-.sensor-line:hover {
-  stroke-width: 3;
-  opacity: 1;
-}
-
-.loadingIndicator {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  background: rgba(255, 255, 255, 0.9);
-  padding: 1rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  z-index: 5;
-  font-size: 0.875rem;
+.tooltipLabel {
+  font-weight: 400;
   color: var(--text-secondary);
-}
-
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--border-color);
-  border-top: 2px solid var(--primary-color);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-.x-axis,
-.y-axis {
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.x-axis path,
-.y-axis path {
-  stroke: var(--border-color);
-}
-
-.x-axis line,
-.y-axis line {
-  stroke: var(--border-color);
-  stroke-width: 1;
-}
-
-.x-axis text,
-.y-axis text {
-  fill: var(--text-secondary);
-  font-size: var(--font-size-xs);
-}
-
-.tooltip {
-  position: fixed;
-  background: var(--background-color);
-  padding: 0.75rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 20px var(--shadow-color);
-  border-left: 3px solid;
-  pointer-events: none;
-  z-index: 10;
-  min-width: 160px;
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-color);
-}
-
-.tooltipTitle {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
-  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
 }
 
 .tooltipValue {
-  font-weight: var(--font-weight-medium);
-  font-size: var(--font-size-base);
-  margin-bottom: 0.25rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  font-family: monospace;
 }
 
-.tooltipTime {
-  font-size: var(--font-size-xs);
+.loading,
+.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  font-size: 0.875rem;
   color: var(--text-secondary);
 }
 
 .error {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--error-color);
-  color: white;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  font-size: var(--font-size-sm);
-  z-index: 5;
-}
-
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 1rem;
-  background: var(--background-color);
-  border-top: 1px solid var(--border-color);
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.legendItem {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.75rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  user-select: none;
-  font-size: var(--font-size-sm);
-  background: var(--background-color);
-  border: 1px solid var(--border-color);
-}
-
-.legendItem:hover {
-  background: var(--hover-emphasis);
-  transform: translateY(-1px);
-}
-
-.legendItem.selected {
-  background: var(--primary-color);
-  color: white;
-  border-color: var(--primary-color);
-}
-
-.legendItem.selected .legendColor {
-  transform: scale(1.2);
-}
-
-.legendColor {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  transition: all 0.2s ease;
-}
-
-/* Scrollbar styling */
-.legend::-webkit-scrollbar {
-  width: 6px;
-}
-
-.legend::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.legend::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 3px;
-}
-
-.legend::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary);
+  color: var(--error-color);
 }
 
 /* Mobile optimizations */
 @media (max-width: 768px) {
-  .timelineContainer {
-    height: 70vh;
+  .controlsHeader {
+    padding: 0.875rem 1rem 0.625rem;
   }
 
-  .header {
-    padding: 0.75rem;
+  .title {
+    font-size: 1.125rem;
+  }
+
+  .controlsBody {
+    padding: 0.625rem 1rem;
+    gap: 1.5rem;
     flex-direction: column;
-    gap: 0.5rem;
-    align-items: stretch;
   }
 
-  .header > div:first-child {
-    text-align: center;
-  }
-
-  .header h3 {
-    font-size: var(--font-size-base);
-  }
-
-  .instructions {
-    font-size: 0.7rem;
-  }
-
-  .headerButtons {
-    justify-content: center;
-  }
-
-  .loadButton,
-  .refreshButton {
-    padding: 0.375rem 0.75rem;
-    font-size: var(--font-size-xs);
-  }
-
-  .legend {
-    padding: 0.75rem;
-    max-height: 100px;
-  }
-
-  .legendItem {
-    padding: 0.25rem 0.5rem;
-    font-size: var(--font-size-xs);
-  }
-
-  .tooltip {
-    min-width: 140px;
-    padding: 0.5rem;
-  }
-
-  .tooltipTitle {
-    font-size: var(--font-size-xs);
-  }
-
-  .tooltipValue {
-    font-size: var(--font-size-sm);
-  }
-
-  .tooltipTime {
-    font-size: var(--font-size-xs);
+  .controlGroup {
+    width: 100%;
   }
 }

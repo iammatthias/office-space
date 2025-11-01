@@ -1,5 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import * as d3 from "d3";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { supabase } from "../../lib/supabase";
 import styles from "./VerticalTimeline.module.css";
 
@@ -8,7 +7,12 @@ interface DataPoint {
   value: number;
   sensorId: string;
   normalizedValue: number;
-  period: string;
+  _metadata?: {
+    date: string;
+    period: "day" | "night";
+    time_start?: string;
+    time_end?: string;
+  };
 }
 
 interface SensorConfig {
@@ -19,1065 +23,1960 @@ interface SensorConfig {
   range: [number, number];
 }
 
+// Flexoki color palette - https://github.com/kepano/flexoki
+const FLEXOKI = {
+  red: {
+    400: "#DA705C",
+    500: "#CB6120",
+    600: "#BC5215",
+  },
+  orange: {
+    400: "#DA702C",
+    500: "#CB6120",
+    600: "#BC5215",
+  },
+  yellow: {
+    400: "#D0A215",
+    500: "#BE9207",
+    600: "#AD8301",
+  },
+  green: {
+    400: "#879A39",
+    500: "#768D21",
+    600: "#66800B",
+  },
+  cyan: {
+    400: "#3AA99F",
+    500: "#2F968D",
+    600: "#24837B",
+  },
+  blue: {
+    400: "#4385BE",
+    500: "#3171B2",
+    600: "#205EA6",
+  },
+  purple: {
+    400: "#8B7EC8",
+    500: "#735EB5",
+    600: "#5E409D",
+  },
+  magenta: {
+    400: "#CE5D97",
+    500: "#B74583",
+    600: "#A02F6F",
+  },
+};
+
 const SENSOR_CONFIGS: SensorConfig[] = [
-  { sensorId: "temp", name: "Temperature", color: "#ff6b6b", unit: "°C", range: [-40, 85] },
-  { sensorId: "hum", name: "Humidity", color: "#4dabf7", unit: "%", range: [0, 100] },
-  { sensorId: "pressure", name: "Pressure", color: "#51cf66", unit: "hPa", range: [300, 1100] },
-  { sensorId: "lux", name: "Light", color: "#ffd43b", unit: "lux", range: [0, 88000] },
-  { sensorId: "uv", name: "UV", color: "#845ef7", unit: "index", range: [0, 11] },
-  { sensorId: "gas", name: "Gas", color: "#339af0", unit: "ppm", range: [0, 1000] },
-  { sensorId: "roll", name: "Roll", color: "#ff922b", unit: "°", range: [-180, 180] },
-  { sensorId: "pitch", name: "Pitch", color: "#20c997", unit: "°", range: [-180, 180] },
-  { sensorId: "yaw", name: "Yaw", color: "#f06595", unit: "°", range: [-180, 180] },
-  { sensorId: "mag_x", name: "Mag X", color: "#e64980", unit: "µT", range: [-4900, 4900] },
-  { sensorId: "mag_y", name: "Mag Y", color: "#f76707", unit: "µT", range: [-4900, 4900] },
-  { sensorId: "mag_z", name: "Mag Z", color: "#2b8a3e", unit: "µT", range: [-4900, 4900] },
+  { sensorId: "temp", name: "Temperature", color: FLEXOKI.red[500], unit: "°C", range: [-40, 85] },
+  { sensorId: "hum", name: "Humidity", color: FLEXOKI.cyan[500], unit: "%", range: [0, 100] },
+  { sensorId: "pressure", name: "Pressure", color: FLEXOKI.blue[500], unit: "hPa", range: [300, 1100] },
+  { sensorId: "lux", name: "Light", color: FLEXOKI.yellow[500], unit: "lux", range: [0, 88000] },
+  { sensorId: "uv", name: "UV", color: FLEXOKI.purple[500], unit: "index", range: [0, 11] },
+  { sensorId: "gas", name: "Gas", color: FLEXOKI.orange[500], unit: "ppm", range: [0, 1000] },
 ];
 
+/**
+ * Decimates data points using Largest-Triangle-Three-Buckets (LTTB) algorithm
+ * to reduce data while preserving visual features like peaks and valleys.
+ */
+const decimateData = (data: DataPoint[], threshold: number): DataPoint[] => {
+  if (data.length <= threshold) {
+    return data;
+  }
+
+  if (threshold < 3) {
+    const step = Math.floor(data.length / Math.max(1, threshold));
+    return data.filter((_, i) => i % step === 0 || i === data.length - 1);
+  }
+
+  const bucketSize = (data.length - 2) / (threshold - 2);
+  const sampled: DataPoint[] = [data[0]];
+
+  let a = 0;
+
+  for (let i = 0; i < threshold - 2; i++) {
+    const rangeStart = Math.floor((i + 1) * bucketSize) + 1;
+    const rangeEnd = Math.floor((i + 2) * bucketSize) + 1;
+    const rangeEndClamped = Math.min(rangeEnd, data.length);
+
+    let avgX = 0;
+    let avgY = 0;
+    let pointCount = 0;
+
+    for (let j = rangeStart; j < rangeEndClamped; j++) {
+      avgX += data[j].timestamp.getTime();
+      avgY += data[j].normalizedValue;
+      pointCount++;
+    }
+    if (pointCount > 0) {
+      avgX /= pointCount;
+      avgY /= pointCount;
+    }
+
+    let maxArea = -1;
+    let maxAreaPoint = rangeStart;
+    const ax = data[a].timestamp.getTime();
+    const ay = data[a].normalizedValue;
+
+    for (let j = rangeStart; j < rangeEndClamped; j++) {
+      const bx = avgX;
+      const by = avgY;
+      const cx = data[j].timestamp.getTime();
+      const cy = data[j].normalizedValue;
+
+      const area = Math.abs((ax - cx) * (by - ay) - (ax - bx) * (cy - ay));
+      if (area > maxArea) {
+        maxArea = area;
+        maxAreaPoint = j;
+      }
+    }
+
+    sampled.push(data[maxAreaPoint]);
+    a = maxAreaPoint;
+  }
+
+  sampled.push(data[data.length - 1]);
+  return sampled;
+};
+
 const normalizeValue = (value: number, sensorRange: [number, number], sensorId: string): number => {
-  // Handle invalid input values
   if (value == null || isNaN(value) || !isFinite(value)) {
-    console.warn(`Invalid value for ${sensorId}:`, value);
     return 0;
   }
 
   const [min, max] = sensorRange;
 
-  // Handle invalid ranges
   if (min >= max || !isFinite(min) || !isFinite(max)) {
-    console.warn(`Invalid range for ${sensorId}:`, [min, max]);
     return 0;
   }
 
-  // Clamp value to sensor range
   const clampedValue = Math.max(min, Math.min(max, value));
 
-  // Special handling for logarithmic sensors (gas and lux)
   if (sensorId.includes("gas") || sensorId.includes("lux")) {
-    // Ensure positive values for log calculation
     const positiveMin = Math.max(0.1, min);
     const positiveValue = Math.max(0.1, clampedValue);
     const positiveMax = Math.max(positiveMin + 0.1, max);
 
-    // Calculate logarithmic values
     const logValue = Math.log10(positiveValue);
     const logMin = Math.log10(positiveMin);
     const logMax = Math.log10(positiveMax);
 
-    // Avoid division by zero
     if (logMax === logMin) {
-      console.warn(`Zero range for ${sensorId} logarithmic calculation`);
-      return 50; // Return middle value if range is zero
+      return 50;
     }
 
     const normalized = ((logValue - logMin) / (logMax - logMin)) * 100;
     return Math.max(0, Math.min(100, normalized));
   }
 
-  // Linear normalization for other sensors
   const normalized = ((clampedValue - min) / (max - min)) * 100;
   return Math.max(0, Math.min(100, normalized));
 };
 
-export const VerticalTimeline = ({ height = 600 }) => {
-  const [data, setData] = useState<Record<string, DataPoint[]>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [selectedSensor, setSelectedSensor] = useState<string | null>(null);
-  const [tooltip, setTooltip] = useState<{ x: number; y: number; data: DataPoint; config: SensorConfig } | null>(null);
-  const [currentTimeRange, setCurrentTimeRange] = useState<{ start: Date; end: Date } | null>(null);
-  const [fullTimeRange, setFullTimeRange] = useState<{ start: Date; end: Date } | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [isZooming, setIsZooming] = useState(false);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const [containerReady, setContainerReady] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(false);
-  const [isProcessingData, setIsProcessingData] = useState(false);
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-
-  // Set initial time range for immediate interaction
-  useEffect(() => {
-    if (!currentTimeRange && !fullTimeRange) {
-      const now = new Date();
-      const initialTimeRange = {
-        start: new Date("2025-01-01"), // Use actual earliest date
-        end: now,
-      };
-      console.log("Setting initial time range:", initialTimeRange);
-      console.log(
-        "📊 Initial time span:",
-        (initialTimeRange.end.getTime() - initialTimeRange.start.getTime()) / (1000 * 60 * 60 * 24),
-        "days"
-      );
-      setCurrentTimeRange(initialTimeRange);
-    }
-  }, [currentTimeRange, fullTimeRange]);
-
-  // Set container ready when ref is available
-  useEffect(() => {
-    if (containerRef.current) {
-      console.log("✅ Container ref is now available");
-      setContainerReady(true);
-    }
-  }, [containerRef.current]);
-
-  // Get container dimensions with proper resize handling
-  const dimensions = useMemo(() => {
-    console.log("🔍 Calculating dimensions...");
-    console.log("Container ref:", containerRef.current);
-    console.log("Container ready:", containerReady);
-
-    if (!containerRef.current || !containerReady) {
-      console.log("❌ Container ref not available or not ready");
-      // Return fallback dimensions to ensure chart renders
-      return {
-        width: 800,
-        height,
-        margin: { top: 40, right: 40, bottom: 60, left: 80 },
-      };
-    }
-
-    const rect = containerRef.current.getBoundingClientRect();
-    console.log("Container rect:", rect);
-
-    const dims = {
-      width: rect.width,
-      height,
-      margin: { top: 40, right: 40, bottom: 60, left: 80 },
-    };
-
-    console.log("✅ Calculated dimensions:", dims);
-    return dims;
-  }, [height, containerReady]);
-
-  // Generate immediate mock data for instant rendering
-  const mockData = useMemo(() => {
-    const now = Date.now();
-    const startDate = new Date("2025-01-01").getTime();
-    const mockDataPoints: Record<string, DataPoint[]> = {};
-
-    console.log("📊 Generating mock data from", new Date(startDate), "to", new Date(now));
-
-    SENSOR_CONFIGS.forEach((config) => {
-      mockDataPoints[config.sensorId] = Array.from({ length: 50 }, (_, i) => {
-        // Increased from 20 to 50 data points
-        // Create more realistic mock data with different patterns for each sensor
-        let value: number;
-        switch (config.sensorId) {
-          case "temp":
-            // Temperature: gradual increase with some variation
-            value = 20 + i * 0.5 + Math.sin(i * 0.3) * 2;
-            break;
-          case "hum":
-            // Humidity: oscillating pattern
-            value = 60 + Math.sin(i * 0.4) * 15 + Math.cos(i * 0.2) * 5;
-            break;
-          case "pressure":
-            // Pressure: slight decrease with noise
-            value = 1013 - i * 0.1 + Math.sin(i * 0.5) * 0.5;
-            break;
-          default:
-            value = 50 + Math.sin(i * 0.5) * 30;
-        }
-
-        // Spread data points evenly from January 1st to now
-        const timeSpan = now - startDate;
-        const timestamp = new Date(startDate + (timeSpan * i) / 49);
-
-        return {
-          timestamp: timestamp,
-          value: value,
-          sensorId: config.sensorId,
-          normalizedValue: normalizeValue(value, config.range, config.sensorId),
-          period: "mock",
-        };
-      });
-    });
-
-    console.log("✅ Mock data generated with", Object.keys(mockDataPoints).length, "sensors");
-    console.log("📊 Sample data points:", mockDataPoints.temp?.slice(0, 3));
-
-    return mockDataPoints;
-  }, []);
-
-  // Memoize chart data to reduce re-renders
-  const chartData = useMemo(() => {
-    const dataToRender = isInitialLoad ? mockData : data;
-    return dataToRender;
-  }, [isInitialLoad, data, mockData]);
-
-  const scales = useMemo(() => {
-    console.log("🔍 Calculating scales...");
-    console.log("Dimensions for scales:", dimensions);
-    console.log("Current time range:", currentTimeRange);
-
-    if (!dimensions) {
-      console.log("❌ No dimensions available for scales");
-      return null;
-    }
-
-    const { width, height, margin } = dimensions;
-    const chartWidth = width - margin.left - margin.right;
-    const chartHeight = height - margin.top - margin.bottom;
-
-    console.log("Chart dimensions:", { chartWidth, chartHeight });
-
-    // Use current time range if available, otherwise use mock data time range
-    const timeRange = currentTimeRange || {
-      start: new Date("2025-01-01"),
-      end: new Date(),
-    };
-
-    console.log("Using time range for scales:", timeRange);
-    console.log(
-      "📊 Time span for scales:",
-      (timeRange.end.getTime() - timeRange.start.getTime()) / (1000 * 60 * 60 * 24),
-      "days"
-    );
-
-    const scaleX = d3
-      .scaleTime()
-      .domain([timeRange.start, timeRange.end])
-      .range([margin.left, margin.left + chartWidth]);
-
-    const scaleY = d3
-      .scaleLinear()
-      .domain([0, 100])
-      .range([chartHeight + margin.top, margin.top]);
-
-    const scales = {
-      x: scaleX,
-      y: scaleY,
-    };
-
-    console.log("✅ Scales calculated:", {
-      xDomain: scales.x.domain(),
-      xRange: scales.x.range(),
-      yDomain: scales.y.domain(),
-      yRange: scales.y.range(),
-    });
-
-    // Test scale conversion
-    if (scales.x.domain().length === 2) {
-      const testDate = new Date("2025-06-01");
-      const testX = scales.x(testDate);
-      console.log("🧪 Scale test - Date:", testDate, "-> X:", testX);
-    }
-
-    return scales;
-  }, [dimensions, currentTimeRange]); // Add currentTimeRange as dependency
-
-  // Render chart with data (mock or real)
-  useEffect(() => {
-    console.log("🔍 Chart rendering effect triggered");
-    console.log("SVG ref:", svgRef.current);
-    console.log("Scales:", scales);
-    console.log("Dimensions:", dimensions);
-    console.log("Data keys:", Object.keys(data));
-    console.log("Is initial load:", isInitialLoad);
-
-    if (!svgRef.current || !scales || !dimensions) {
-      console.log("❌ Missing required dependencies for chart rendering");
-      return;
-    }
-
-    console.log("✅ All dependencies available, rendering chart...");
-
-    const svg = d3.select(svgRef.current);
-    console.log("D3 SVG selection:", svg.node());
-
-    // Ensure SVG has proper dimensions
-    svg.attr("width", dimensions.width).attr("height", dimensions.height);
-
-    // Clear any existing content
-    svg.selectAll("*").remove();
-
-    // Create chart group
-    const chartGroup = svg.append("g").attr("class", "chart-group");
-
-    // Get the current time range for filtering
-    const timeRange = currentTimeRange || {
-      start: new Date("2025-01-01"),
-      end: new Date(),
-    };
-
-    console.log("📊 Filtering data for time range:", timeRange);
-    console.log(
-      "📊 Time range span:",
-      (timeRange.end.getTime() - timeRange.start.getTime()) / (1000 * 60 * 60 * 24),
-      "days"
-    );
-
-    // Create line generator
-    const line = d3
-      .line<DataPoint>()
-      .x((d) => scales.x(d.timestamp))
-      .y((d) => scales.y(d.normalizedValue))
-      .curve(d3.curveBasis);
-
-    console.log("✅ Line generator created");
-
-    // Determine which data to use
-    const dataToRender = chartData;
-    const sensorsToRender = SENSOR_CONFIGS; // Show all sensors instead of just first 3
-
-    console.log("Using data:", isInitialLoad ? "mock" : "real");
-    console.log("📊 Available data keys:", Object.keys(dataToRender));
-    console.log(
-      "Sensors to render:",
-      sensorsToRender.map((s) => s.sensorId)
-    );
-
-    // Test line generator with sample data
-    if (Object.keys(dataToRender).length > 0) {
-      const sampleData = dataToRender.temp?.slice(0, 3) || [];
-      if (sampleData.length > 0) {
-        console.log("🧪 Testing line generator with sample data:");
-        sampleData.forEach((point, i) => {
-          const x = scales.x(point.timestamp);
-          const y = scales.y(point.normalizedValue);
-          console.log(
-            `  Point ${i}: timestamp=${point.timestamp.toISOString()}, value=${point.value}, normalized=${
-              point.normalizedValue
-            }, x=${x}, y=${y}`
-          );
-        });
+export const VerticalTimeline = () => {
+  // Initialize state from URL params
+  const getInitialSensorsFromURL = (): Set<string> => {
+    const params = new URLSearchParams(window.location.search);
+    const sensorsParam = params.get("sensors");
+    if (sensorsParam) {
+      const sensorIds = sensorsParam.split(",").filter((id) => SENSOR_CONFIGS.some((c) => c.sensorId === id));
+      if (sensorIds.length > 0) {
+        return new Set(sensorIds);
       }
     }
-
-    // Draw lines with performance optimization
-    let linesDrawn = 0;
-    const renderStartTime = performance.now();
-
-    sensorsToRender.forEach((config) => {
-      const sensorData = dataToRender[config.sensorId];
-      console.log(`Processing sensor ${config.sensorId}:`, sensorData?.length, "data points");
-
-      if (!sensorData || sensorData.length === 0) {
-        console.log(`❌ No data for sensor ${config.sensorId}`);
-        return;
-      }
-
-      // Show first few data points for debugging
-      console.log(
-        `📊 Sample data for ${config.sensorId}:`,
-        sensorData.slice(0, 3).map((d) => ({
-          timestamp: d.timestamp.toISOString(),
-          value: d.value,
-          normalizedValue: d.normalizedValue,
-        }))
-      );
-
-      // Filter data to only include points within the current time range
-      // Use a more lenient filter to ensure we see data
-      const filteredData = sensorData.filter((point) => {
-        const timestamp = point.timestamp.getTime();
-        const startTime = timeRange.start.getTime();
-        const endTime = timeRange.end.getTime();
-
-        // Add some tolerance to ensure we don't filter out too much
-        const tolerance = 24 * 60 * 60 * 1000; // 1 day tolerance
-        return timestamp >= startTime - tolerance && timestamp <= endTime + tolerance;
-      });
-
-      console.log(`📊 Filtered ${config.sensorId}: ${sensorData.length} -> ${filteredData.length} points`);
-
-      // TEMPORARILY: Use all data to debug plotting issue
-      const dataToUse = sensorData; // Use all data instead of filtered
-      console.log(`🔄 Using all data for ${config.sensorId}: ${dataToUse.length} points`);
-
-      if (dataToUse.length === 0) {
-        console.log(`❌ No data points for sensor ${config.sensorId}`);
-        return;
-      }
-
-      drawSensorLine(chartGroup, dataToUse, config, line, isInitialLoad);
-      linesDrawn++;
-    });
-
-    const renderEndTime = performance.now();
-    const renderDuration = renderEndTime - renderStartTime;
-    console.log(`✅ Drew ${linesDrawn} lines total in ${renderDuration.toFixed(2)}ms`);
-
-    // Add axes
-    const xAxis = d3.axisBottom(scales.x);
-    const yAxis = d3.axisLeft(scales.y);
-
-    // Add X axis
-    svg
-      .append("g")
-      .attr("class", "x-axis")
-      .attr("transform", `translate(0,${dimensions.height - dimensions.margin.bottom})`)
-      .call(xAxis as any);
-
-    // Add Y axis
-    svg
-      .append("g")
-      .attr("class", "y-axis")
-      .attr("transform", `translate(${dimensions.margin.left},0)`)
-      .call(yAxis as any);
-
-    console.log("✅ Axes added successfully");
-    console.log("✅ Chart rendering completed successfully");
-  }, [scales, dimensions, chartData, isInitialLoad, currentTimeRange]); // Add currentTimeRange dependency
-
-  // Helper function to draw sensor line
-  const drawSensorLine = (
-    chartGroup: d3.Selection<SVGGElement, unknown, null, undefined>,
-    data: DataPoint[],
-    config: SensorConfig,
-    line: d3.Line<DataPoint>,
-    isInitialLoad: boolean
-  ) => {
-    try {
-      const path = chartGroup
-        .append("path")
-        .datum(data)
-        .attr("class", "sensor-line")
-        .attr("d", line)
-        .style("stroke", config.color)
-        .style("stroke-width", 2)
-        .style("fill", "none")
-        .style("opacity", isInitialLoad ? 0.8 : 1)
-        .style("cursor", "pointer");
-
-      // Add tooltip functionality only for real data to improve performance
-      if (!isInitialLoad && scales) {
-        path
-          .on("mouseover", function (event, d) {
-            const [mouseX] = d3.pointer(event);
-            const bisect = d3.bisector((d: DataPoint) => d.timestamp).left;
-            const x0 = scales.x.invert(mouseX);
-            const i = bisect(d, x0, 1);
-            const d0 = d[i - 1];
-            const d1 = d[i];
-            const dataPoint = x0.getTime() - d0.timestamp.getTime() > d1.timestamp.getTime() - x0.getTime() ? d1 : d0;
-
-            setTooltip({
-              x: event.clientX,
-              y: event.clientY,
-              data: dataPoint,
-              config: config,
-            });
-          })
-          .on("mousemove", function (event, d) {
-            const [mouseX] = d3.pointer(event);
-            const bisect = d3.bisector((d: DataPoint) => d.timestamp).left;
-            const x0 = scales.x.invert(mouseX);
-            const i = bisect(d, x0, 1);
-            const d0 = d[i - 1];
-            const d1 = d[i];
-            const dataPoint = x0.getTime() - d0.timestamp.getTime() > d1.timestamp.getTime() - x0.getTime() ? d1 : d0;
-
-            setTooltip({
-              x: event.clientX,
-              y: event.clientY,
-              data: dataPoint,
-              config: config,
-            });
-          })
-          .on("mouseout", () => {
-            setTooltip(null);
-          });
-      }
-
-      console.log(`✅ Drew line for ${config.sensorId}, path length:`, path.node()?.getTotalLength());
-    } catch (error) {
-      console.error(`❌ Error drawing line for ${config.sensorId}:`, error);
-    }
+    return new Set(SENSOR_CONFIGS.map((c) => c.sensorId));
   };
 
-  // Get the full time range from the database
-  const fetchFullTimeRange = useCallback(async () => {
-    try {
-      console.log("Fetching full time range from database...");
+  const getInitialDaysFromURL = (): number | null => {
+    const params = new URLSearchParams(window.location.search);
+    const daysParam = params.get("days");
+    if (daysParam === "all") return null;
+    const days = parseInt(daysParam || "");
+    if (!isNaN(days) && days > 0) return days;
+    return 7; // Default to 7 days
+  };
 
-      // Get the earliest and latest timestamps
-      const { data: earliestData, error: earliestError } = await supabase
-        .from("environmental_data")
-        .select("time")
-        .order("time", { ascending: true })
-        .limit(1);
+  const [data, setData] = useState<Record<string, DataPoint[]>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [loadedPages, setLoadedPages] = useState(0);
+  const [totalPages, setTotalPages] = useState<number | null>(null);
+  const [selectedSensors, setSelectedSensors] = useState<Set<string>>(getInitialSensorsFromURL());
+  const [timeRange, setTimeRange] = useState<{ start: Date; end: Date } | null>(null);
+  const [viewStartDate, setViewStartDate] = useState<Date | null>(null);
+  const [viewEndDate, setViewEndDate] = useState<Date | null>(null);
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const initialDays = getInitialDaysFromURL();
 
-      const { data: latestData, error: latestError } = await supabase
-        .from("environmental_data")
-        .select("time")
-        .order("time", { ascending: false })
-        .limit(1);
+  // Update URL params when state changes
+  const updateURLParams = useCallback((sensors: Set<string>, days: number | null) => {
+    const params = new URLSearchParams();
 
-      if (earliestError || latestError) {
-        console.error("Error fetching time range:", earliestError || latestError);
-        return null;
-      }
-
-      if (!earliestData?.[0] || !latestData?.[0]) {
-        console.log("No data available in database");
-        return null;
-      }
-
-      const fullRange = {
-        start: new Date(earliestData[0].time),
-        end: new Date(latestData[0].time),
-      };
-
-      console.log("Full time range:", fullRange);
-      return fullRange;
-    } catch (err) {
-      console.error("Error fetching full time range:", err);
-      return null;
+    // Only add sensors param if not all sensors are selected
+    if (sensors.size !== SENSOR_CONFIGS.length) {
+      params.set("sensors", Array.from(sensors).join(","));
     }
+
+    // Add days param
+    if (days === null) {
+      params.set("days", "all");
+    } else if (days !== 7) {
+      // Only add if not default
+      params.set("days", days.toString());
+    }
+
+    // Update URL with query params (format: /timeline?sensors=temp&days=30)
+    const queryString = params.toString();
+    const newURL = queryString ? `/timeline?${queryString}` : "/timeline";
+    window.history.replaceState({}, "", newURL);
   }, []);
 
-  // Optimized data fetching function based on Supabase query optimization
-  const fetchOptimizedData = useCallback(
-    async (startTime?: Date, endTime?: Date) => {
+  // Fetch a single page of daily day/night data for lazy loading
+  const fetchDataPage = useCallback(
+    async (
+      startTime: Date | undefined,
+      endTime: Date | undefined,
+      page: number,
+      pageSize: number = 1000,
+      useRecentView: boolean = false
+    ) => {
       try {
-        console.log("Fetching optimized data...", { startTime, endTime });
+        // Use recent view for initial loads (fast, last 90 days), full view for "All" or date-filtered queries
+        const viewName = useRecentView ? "daily_daynight_data_recent" : "daily_daynight_data";
 
-        const queryStartTime = performance.now();
+        // Build query for this specific page
+        let pageQuery = supabase.from(viewName).select("*", { count: "exact" });
 
-        let query = supabase
-          .from("environmental_data")
-          .select("time, temp, hum, pressure, lux, uv, gas, roll, pitch, yaw, mag_x, mag_y, mag_z")
-          .order("time", { ascending: false }); // Leverage the DESC index
+        // Always exclude current day (today) - show data up to yesterday
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        pageQuery = pageQuery.lte("date", yesterday.toISOString().split("T")[0]);
 
-        // Apply time range filters if provided
-        if (startTime && endTime) {
-          query = query.gte("time", startTime.toISOString()).lte("time", endTime.toISOString());
-        } else {
-          // If no time range provided, get the full range first
-          const fullRange = await fetchFullTimeRange();
-          if (fullRange) {
-            query = query.gte("time", fullRange.start.toISOString()).lte("time", fullRange.end.toISOString());
-          } else {
-            // Fallback to last 7 days if no data available
-            const defaultEnd = new Date();
-            const defaultStart = new Date(defaultEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
-            query = query.gte("time", defaultStart.toISOString()).lte("time", defaultEnd.toISOString());
-          }
+        // Apply additional date filters if provided
+        if (startTime) {
+          pageQuery = pageQuery.gte("date", startTime.toISOString().split("T")[0]);
+        }
+        if (endTime) {
+          // Use the smaller of endTime or yesterday
+          const endDate = endTime < yesterday ? endTime : yesterday;
+          pageQuery = pageQuery.lte("date", endDate.toISOString().split("T")[0]);
         }
 
-        // Increase limit for better data coverage
-        query = query.limit(5000); // Increased from 2000 to 5000 for more comprehensive data
+        // Order by date descending, then period descending (day before night) to get most recent first
+        pageQuery = pageQuery.order("date", { ascending: false }).order("period", { ascending: false });
 
-        const { data: rawData, error } = await query;
+        const offset = page * pageSize;
+        const { data: rawData, error: queryError, count } = await pageQuery.range(offset, offset + pageSize - 1);
 
-        const queryEndTime = performance.now();
-        const queryDuration = queryEndTime - queryStartTime;
-
-        console.log(`✅ Query completed in ${queryDuration.toFixed(2)}ms`);
-
-        if (error) throw error;
-        if (!rawData || rawData.length === 0) {
-          console.log("No data available for time range");
-          return null;
+        if (queryError) {
+          throw queryError;
         }
 
-        console.log(`Retrieved ${rawData.length} data points with optimized query`);
-
-        // Process data efficiently
-        const processedData: Record<string, DataPoint[]> = {};
-
-        // Process all sensors for comprehensive data
-        const processingStartTime = performance.now();
-        setIsProcessingData(true);
-
-        SENSOR_CONFIGS.forEach((config) => {
-          processedData[config.sensorId] = rawData
-            .filter((row) => row[config.sensorId as keyof typeof row] != null)
-            .map((row) => ({
-              timestamp: new Date(row.time),
-              value: Number(row[config.sensorId as keyof typeof row]) || 0,
-              sensorId: config.sensorId,
-              normalizedValue: normalizeValue(
-                Number(row[config.sensorId as keyof typeof row]),
-                config.range,
-                config.sensorId
-              ),
-              period: "hourly",
-            }))
-            .reverse(); // Get chronological order
-        });
-
-        const processingEndTime = performance.now();
-        const processingDuration = processingEndTime - processingStartTime;
-        setIsProcessingData(false);
-
-        console.log(`✅ Data processing completed in ${processingDuration.toFixed(2)}ms`);
-        console.log(`✅ Total optimization time: ${(queryDuration + processingDuration).toFixed(2)}ms`);
-
-        return processedData;
+        return {
+          data: rawData || [],
+          totalCount: count || 0,
+          hasMore: rawData ? rawData.length === pageSize : false,
+        };
       } catch (err) {
-        console.error("Error in optimized data fetch:", err);
         throw err;
       }
     },
-    [fetchFullTimeRange]
+    []
   );
 
-  // Load real data in background with optimized queries
-  useEffect(() => {
-    const loadRealData = async () => {
-      try {
-        console.log("🔄 Loading real data with optimized queries...");
+  // Fetch hourly data for a specific date and period (for hover details)
+  const fetchHourlyDataForHover = useCallback(async (date: Date, period: "day" | "night"): Promise<DataPoint[]> => {
+    try {
+      // Calculate the time range for this date/period
+      // Day: 6 AM - 6 PM
+      // Night: 6 PM (previous day) - 6 AM (current day)
+      const dayStart = new Date(date);
+      dayStart.setHours(6, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(18, 0, 0, 0);
 
-        // First, get the full time range
-        const fullRange = await fetchFullTimeRange();
-        if (fullRange) {
-          setFullTimeRange(fullRange);
-          console.log("✅ Full time range set:", fullRange);
-          console.log(
-            "📊 Time span:",
-            (fullRange.end.getTime() - fullRange.start.getTime()) / (1000 * 60 * 60 * 24),
-            "days"
-          );
-        }
+      let startTime: Date;
+      let endTime: Date;
 
-        const processedData = await fetchOptimizedData();
+      if (period === "day") {
+        startTime = dayStart;
+        endTime = dayEnd;
+      } else {
+        // Night spans from 6 PM previous day to 6 AM current day
+        startTime = new Date(dayStart);
+        startTime.setDate(startTime.getDate() - 1);
+        startTime.setHours(18, 0, 0, 0);
+        endTime = dayStart;
+      }
 
-        if (processedData) {
-          setData(processedData);
-          setIsInitialLoad(false);
+      const { data: rawData, error: queryError } = await supabase
+        .from("hourly_data")
+        .select("*")
+        .gte("time", startTime.toISOString())
+        .lte("time", endTime.toISOString())
+        .order("time", { ascending: true });
 
-          // Set current time range based on actual data
-          const allTimestamps = Object.values(processedData)
-            .flat()
-            .map((point) => point.timestamp);
+      if (queryError) {
+        return [];
+      }
 
-          if (allTimestamps.length > 0) {
-            const startTime = new Date(Math.min(...allTimestamps.map((d) => d.getTime())));
-            const endTime = new Date(Math.max(...allTimestamps.map((d) => d.getTime())));
+      if (!rawData || rawData.length === 0) {
+        return [];
+      }
 
-            setCurrentTimeRange({ start: startTime, end: endTime });
-            console.log("✅ Current time range set:", { start: startTime, end: endTime });
-            console.log("📊 Data span:", (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60 * 24), "days");
+      // Process hourly data into DataPoint format
+      const processedPoints: DataPoint[] = [];
+
+      SENSOR_CONFIGS.forEach((config) => {
+        rawData.forEach((row: any) => {
+          const value = Number(row[config.sensorId as keyof typeof row]);
+          if (value != null && !isNaN(value)) {
+            let timestamp: Date;
+            const timeValue = row.time;
+
+            if (typeof timeValue === "string") {
+              timestamp = new Date(timeValue);
+              if (isNaN(timestamp.getTime())) {
+                timestamp = new Date(timeValue + "Z");
+              }
+            } else {
+              timestamp = new Date(timeValue);
+            }
+
+            processedPoints.push({
+              timestamp,
+              value,
+              sensorId: config.sensorId,
+              normalizedValue: normalizeValue(value, config.range, config.sensorId),
+            });
           }
-
-          console.log("✅ Real data loaded successfully with optimized queries");
-        } else {
-          console.log("❌ No data available");
-        }
-      } catch (err) {
-        console.error("❌ Error loading real data:", err);
-        setError("Failed to load sensor data");
-      }
-    };
-
-    // Load real data after a short delay
-    const timer = setTimeout(loadRealData, 1000);
-    return () => clearTimeout(timer);
-  }, [fetchOptimizedData, fetchFullTimeRange]);
-
-  // Load data for specific time range (for zooming)
-  const loadDataForTimeRange = useCallback(
-    async (startTime: Date, endTime: Date) => {
-      try {
-        console.log("Loading data for specific time range:", { startTime, endTime });
-
-        const processedData = await fetchOptimizedData(startTime, endTime);
-
-        if (processedData) {
-          setData(processedData);
-          console.log("Data loaded for time range:", Object.keys(processedData));
-        }
-      } catch (err) {
-        console.error("Error loading data for time range:", err);
-      }
-    },
-    [fetchOptimizedData]
-  );
-
-  // Load data for the current view
-  const loadDataForCurrentView = useCallback(async () => {
-    if (currentTimeRange) {
-      console.log("Loading data for current view:", currentTimeRange);
-      setIsLoadingData(true);
-      try {
-        await loadDataForTimeRange(currentTimeRange.start, currentTimeRange.end);
-      } finally {
-        setIsLoadingData(false);
-      }
-    }
-  }, [currentTimeRange, loadDataForTimeRange]);
-
-  // Initialize zoom behavior with mobile optimization
-  useEffect(() => {
-    if (!svgRef.current || !scales || !dimensions) return;
-
-    const svg = d3.select(svgRef.current);
-
-    // Remove existing zoom behavior
-    if (zoomRef.current) {
-      svg.on(".zoom", null);
-    }
-
-    // Use full time range for zoom behavior
-    const timeRange = fullTimeRange || {
-      start: new Date("2025-01-01"), // Use actual earliest date
-      end: new Date(),
-    };
-
-    console.log("🔄 Initializing zoom with full time range:", timeRange);
-
-    zoomRef.current = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 50]) // Reasonable zoom levels
-      .on("start", () => {
-        console.log("🔄 Zoom started");
-        setIsZooming(true);
-      })
-      .on("zoom", (event) => {
-        const { transform } = event;
-        console.log("🔄 Zoom event triggered:", { x: transform.x, y: transform.y, k: transform.k });
-
-        // Calculate new time range based on zoom transform
-        const { width, margin } = dimensions;
-        const chartWidth = width - margin.left - margin.right;
-
-        // Create a scale that maps the full time range to the chart area
-        const xScale = d3
-          .scaleTime()
-          .domain([timeRange.start, timeRange.end])
-          .range([margin.left, margin.left + chartWidth]);
-
-        // Calculate the visible time range based on transform
-        const visibleStart = xScale.invert(margin.left - transform.x / transform.k);
-        const visibleEnd = xScale.invert(margin.left + chartWidth - transform.x / transform.k);
-
-        // Clamp to full time range
-        const clampedStart = new Date(Math.max(timeRange.start.getTime(), visibleStart.getTime()));
-        const clampedEnd = new Date(Math.min(timeRange.end.getTime(), visibleEnd.getTime()));
-
-        console.log("🔄 New visible range:", {
-          start: clampedStart.toISOString(),
-          end: clampedEnd.toISOString(),
-          zoomLevel: transform.k,
-          percentage: Math.round(
-            ((clampedEnd.getTime() - clampedStart.getTime()) / (timeRange.end.getTime() - timeRange.start.getTime())) *
-              100
-          ),
         });
-
-        // Update current time range and zoom level
-        setCurrentTimeRange({ start: clampedStart, end: clampedEnd });
-        setZoomLevel(transform.k);
-      })
-      .on("end", () => {
-        console.log("🔄 Zoom ended");
-        setIsZooming(false);
       });
 
-    svg.call(zoomRef.current);
-
-    console.log("✅ Zoom behavior initialized");
-  }, [scales, fullTimeRange, dimensions]);
-
-  // Load data when time range changes significantly
-  useEffect(() => {
-    if (currentTimeRange && !isInitialLoad) {
-      const timeSpan = currentTimeRange.end.getTime() - currentTimeRange.start.getTime();
-      const fullSpan = fullTimeRange ? fullTimeRange.end.getTime() - fullTimeRange.start.getTime() : 0;
-
-      // Only load new data if we're zoomed in significantly (less than 50% of full range)
-      if (fullSpan > 0 && timeSpan < fullSpan * 0.5) {
-        console.log("🔄 Loading data for new time range:", currentTimeRange);
-        loadDataForTimeRange(currentTimeRange.start, currentTimeRange.end);
-      }
+      return processedPoints.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    } catch (err) {
+      return [];
     }
-  }, [currentTimeRange, isInitialLoad, fullTimeRange, loadDataForTimeRange]);
-
-  // Simple test to show all data
-  const testShowAllData = useCallback(() => {
-    console.log("🧪 Testing show all data");
-    console.log("📊 Chart data keys:", Object.keys(chartData));
-    console.log("📊 Sample data:", chartData.temp?.slice(0, 5));
-
-    // Force a re-render with all data
-    setCurrentTimeRange({
-      start: new Date("2025-01-01"),
-      end: new Date(),
-    });
-  }, [chartData]);
-
-  // Debug current state
-  const debugCurrentState = useCallback(() => {
-    console.log("🔍 === DEBUG CURRENT STATE ===");
-    console.log("Current time range:", currentTimeRange);
-    console.log("Full time range:", fullTimeRange);
-    console.log("Zoom level:", zoomLevel);
-    console.log("Is initial load:", isInitialLoad);
-    console.log("Data keys:", Object.keys(data));
-    console.log("Chart data keys:", Object.keys(chartData));
-    console.log("Dimensions:", dimensions);
-    console.log("Scales:", scales);
-    console.log("================================");
-  }, [currentTimeRange, fullTimeRange, zoomLevel, isInitialLoad, data, chartData, dimensions, scales]);
-
-  // Simple manual zoom test
-  const manualZoomTest = useCallback(() => {
-    console.log("🧪 Manual zoom test - setting time range to March 2025");
-    const testStart = new Date("2025-03-01");
-    const testEnd = new Date("2025-03-31");
-    setCurrentTimeRange({ start: testStart, end: testEnd });
-    setZoomLevel(5);
   }, []);
 
-  // Test zoom function
-  const testZoom = useCallback(() => {
-    if (fullTimeRange) {
-      // Test zoom to a specific time range (e.g., March 2025)
-      const testStart = new Date("2025-03-01");
-      const testEnd = new Date("2025-03-31");
+  // Process raw daily day/night data into DataPoint format
+  const processRawData = useCallback((rawData: any[]): Record<string, DataPoint[]> => {
+    const processedData: Record<string, DataPoint[]> = {};
 
-      console.log("🧪 Testing zoom to March 2025:", { testStart, testEnd });
-      setCurrentTimeRange({ start: testStart, end: testEnd });
-      setZoomLevel(5); // Set a reasonable zoom level
+    SENSOR_CONFIGS.forEach((config) => {
+      processedData[config.sensorId] = rawData
+        .filter((row: any) => row[config.sensorId as keyof typeof row] != null)
+        .map((row: any) => {
+          // Parse date and create timestamp
+          // Use time_start if available, otherwise construct from date + period
+          let timestamp: Date;
 
-      // Also trigger D3 zoom transform
-      if (zoomRef.current && svgRef.current) {
-        const svg = d3.select(svgRef.current);
-        // Calculate appropriate transform for this time range
-        const timeRange = fullTimeRange;
-        const { width, margin } = dimensions;
-        const chartWidth = width - margin.left - margin.right;
+          if (row.time_start) {
+            const timeValue = row.time_start;
+            if (typeof timeValue === "string") {
+              timestamp = new Date(timeValue);
+              if (isNaN(timestamp.getTime())) {
+                timestamp = new Date(timeValue + "Z");
+              }
+            } else {
+              timestamp = new Date(timeValue);
+            }
+          } else {
+            // Construct timestamp from date + period
+            const dateStr = row.date;
+            const period = row.period;
 
-        const xScale = d3
-          .scaleTime()
-          .domain([timeRange.start, timeRange.end])
-          .range([margin.left, margin.left + chartWidth]);
+            if (dateStr) {
+              timestamp = new Date(dateStr);
+              // Set to middle of the period for display
+              if (period === "day") {
+                timestamp.setHours(12, 0, 0, 0); // Noon
+              } else {
+                timestamp.setHours(0, 0, 0, 0); // Midnight
+              }
+            } else {
+              timestamp = new Date();
+            }
+          }
 
-        const targetX = xScale(testStart);
-        const scale = chartWidth / (xScale(testEnd) - xScale(testStart));
+          // Ensure we have a valid timestamp
+          if (isNaN(timestamp.getTime())) {
+            timestamp = new Date();
+          }
 
-        const transform = d3.zoomIdentity.translate(-targetX * scale + margin.left, 0).scale(scale);
+          return {
+            timestamp,
+            value: Number(row[config.sensorId as keyof typeof row]) || 0,
+            sensorId: config.sensorId,
+            normalizedValue: normalizeValue(
+              Number(row[config.sensorId as keyof typeof row]),
+              config.range,
+              config.sensorId
+            ),
+            // Store additional metadata for hover
+            _metadata: {
+              date: row.date,
+              period: row.period,
+              time_start: row.time_start,
+              time_end: row.time_end,
+            },
+          };
+        })
+        // Reverse to get chronological order (oldest first) since query is descending
+        .reverse()
+        // Sort by timestamp to ensure proper order
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    });
 
-        svg.call(zoomRef.current.transform, transform);
-      }
-    }
-  }, [fullTimeRange, dimensions]);
+    return processedData;
+  }, []);
 
-  // Reset zoom to full time range
-  const resetZoom = useCallback(() => {
-    if (fullTimeRange) {
-      console.log("🔄 Resetting zoom to full time range:", fullTimeRange);
-      setCurrentTimeRange(fullTimeRange);
-      setZoomLevel(1);
-
-      // Reset D3 zoom transform
-      if (zoomRef.current && svgRef.current) {
-        const svg = d3.select(svgRef.current);
-        svg.call(zoomRef.current.transform, d3.zoomIdentity);
-        console.log("✅ D3 zoom transform reset");
-      }
-    }
-  }, [fullTimeRange]);
-
-  // Handle window resize with debouncing
+  // Load initial page of data on mount
   useEffect(() => {
-    let resizeTimeout: NodeJS.Timeout;
+    const loadInitialData = async () => {
+      setIsLoading(true);
+      setError(null);
+      setLoadedPages(0);
 
-    const handleResize = () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        if (zoomRef.current && svgRef.current) {
-          d3.select(svgRef.current).call(zoomRef.current.transform, d3.zoomIdentity);
+      try {
+        // Daily data has 2 rows per day (day + night), so we can use larger page size
+        // Use recent view for initial load (fast, optimized for last 90 days)
+        const pageSize = 2000; // ~1000 days worth of data
+        const result = await fetchDataPage(undefined, undefined, 0, pageSize, true); // Use recent view for initial load
+
+        if (result.data && result.data.length > 0) {
+          const processedData = processRawData(result.data);
+
+          // Calculate total pages from count
+          const total = result.totalCount || result.data.length;
+          const pages = Math.ceil(total / pageSize);
+          setTotalPages(pages);
+
+          const totalPoints = Object.values(processedData).reduce((sum, points) => sum + points.length, 0);
+          if (totalPoints === 0) {
+            setError("No sensor data found in the database");
+          } else {
+            setData(processedData);
+            setLoadedPages(1);
+
+            // Calculate time range from initial data
+            // For the initial range, we'll use the database query to get the actual min/max
+            // This gives us the true range even if we haven't loaded all pages yet
+            const allTimestamps = Object.values(processedData)
+              .flat()
+              .map((p: DataPoint) => p.timestamp);
+
+            if (allTimestamps.length > 0) {
+              // Get the range from the first page (most recent data)
+              const firstPageEnd = new Date(Math.max(...allTimestamps.map((t: Date) => t.getTime())));
+              const firstPageStart = new Date(Math.min(...allTimestamps.map((t: Date) => t.getTime())));
+
+              // For initial load with recent view, we only have ~90 days of data
+              // Just use the range from the first page - no need to query for earliest date
+              // SQL query already excludes current day, so use the data as-is
+              const fullStart = firstPageStart;
+              const fullEnd = new Date(firstPageEnd);
+              fullEnd.setHours(23, 59, 59, 999); // End of the most recent day (already excludes today via SQL)
+
+              setTimeRange({ start: fullStart, end: fullEnd });
+              if (!viewStartDate || !viewEndDate) {
+                // Default to 7 day view ending at the most recent available data
+                const defaultEnd = new Date(fullEnd);
+                const defaultStart = new Date(defaultEnd);
+                defaultStart.setDate(defaultStart.getDate() - 7);
+                setViewStartDate(defaultStart);
+                setViewEndDate(defaultEnd);
+              }
+            }
+
+            // Don't load remaining pages for initial load with recent view
+            // Only load more if user explicitly requests "All" (which uses full view)
+            // The recent view only has ~90 days, so we likely won't have multiple pages
+            // If we do, load them but still use recent view
+            if (pages > 1) {
+              loadRemainingPages(pages, pageSize, true); // Keep using recent view
+            }
+          }
+        } else {
+          setError("Failed to fetch sensor data - query returned no results. Check if the table has data.");
         }
-      }, 250);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to load sensor data";
+        setError(`Failed to load sensor data: ${errorMessage}`);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  // Load remaining pages in the background
+  const loadRemainingPages = useCallback(
+    async (totalPages: number, pageSize: number, useRecentView: boolean = false) => {
+      setIsLoadingMore(true);
+
+      try {
+        for (let page = 1; page < totalPages; page++) {
+          const result = await fetchDataPage(undefined, undefined, page, pageSize, useRecentView);
+
+          if (result.data && result.data.length > 0) {
+            const newProcessedData = processRawData(result.data);
+
+            // Merge new data with existing data
+            setData((prevData) => {
+              const merged: Record<string, DataPoint[]> = {};
+
+              SENSOR_CONFIGS.forEach((config) => {
+                const existing = prevData[config.sensorId] || [];
+                const newPoints = newProcessedData[config.sensorId] || [];
+
+                // Combine and deduplicate by timestamp
+                const combined: DataPoint[] = [...existing, ...newPoints];
+                const unique = combined.reduce((acc, point: DataPoint) => {
+                  const key = point.timestamp.getTime();
+                  if (!acc.has(key)) {
+                    acc.set(key, point);
+                  }
+                  return acc;
+                }, new Map<number, DataPoint>());
+
+                // Sort chronologically
+                merged[config.sensorId] = Array.from(unique.values()).sort(
+                  (a: DataPoint, b: DataPoint) => a.timestamp.getTime() - b.timestamp.getTime()
+                );
+              });
+
+              return merged;
+            });
+
+            setLoadedPages((prev) => prev + 1);
+
+            // Update time range as we load more data
+            const allTimestamps = Object.values(newProcessedData)
+              .flat()
+              .map((p: DataPoint) => p.timestamp);
+
+            if (allTimestamps.length > 0) {
+              const newStart = new Date(Math.min(...allTimestamps.map((t) => t.getTime())));
+              const newEnd = new Date(Math.max(...allTimestamps.map((t) => t.getTime())));
+              // SQL query already excludes current day, use data as-is
+              newEnd.setHours(23, 59, 59, 999);
+
+              setTimeRange((prev) => {
+                if (!prev) return { start: newStart, end: newEnd };
+
+                const overallStart = prev.start < newStart ? prev.start : newStart;
+                const overallEnd = prev.end > newEnd ? prev.end : newEnd;
+
+                return { start: overallStart, end: overallEnd };
+              });
+            }
+          }
+
+          // Small delay to avoid overwhelming the database
+          // Longer delay when using full view to avoid timeouts
+          const delay = useRecentView ? 100 : 200;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      } catch (err) {
+        // Silent error handling - pages load in background
+      } finally {
+        setIsLoadingMore(false);
+      }
+    },
+    [fetchDataPage, processRawData]
+  );
+
+  // Handle window resize for responsive chart
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
     };
 
     window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      clearTimeout(resizeTimeout);
-    };
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Database optimization suggestions based on Supabase query optimization guide
-  const suggestDatabaseOptimizations = () => {
-    console.log("=== Database Optimization Status ===");
-    console.log("Based on Supabase Query Optimization Guide:");
-    console.log("1. ✅ Time index exists: environmental_data_time_idx");
-    console.log("2. ✅ Composite indexes created for common queries");
-    console.log("3. ✅ Partial indexes for non-null values");
-    console.log("4. ✅ BRIN index for time-based queries");
-    console.log("5. 🔧 Consider partitioning by time for large datasets");
-    console.log("6. 🔧 Run ANALYZE environmental_data; to update statistics");
-    console.log("7. 📊 Performance monitoring enabled - check console for timing");
-    console.log("==========================================");
+  // Prepare data for vertical timeline visualization
+  const timelineData = useMemo(() => {
+    if (!data || Object.keys(data).length === 0) {
+      return {
+        sensorLines: [] as Array<{ sensorId: string; points: DataPoint[]; config: SensorConfig }>,
+        timeRange: null,
+        chartDimensions: null,
+      };
+    }
+
+    const sensorLines: Array<{ sensorId: string; points: DataPoint[]; config: SensorConfig }> = [];
+
+    // First pass: collect all points for each sensor to calculate actual min/max
+    const sensorRanges: Record<string, { min: number; max: number }> = {};
+    SENSOR_CONFIGS.forEach((config) => {
+      if (!selectedSensors.has(config.sensorId)) return;
+
+      // Only use day/night aggregated data points (those with _metadata)
+      // Exclude any hourly hover data that might have been mixed in
+      let sensorPoints = (data[config.sensorId] || []).filter((p) => p._metadata !== undefined);
+
+      // Filter by date range if set
+      if (viewStartDate && viewEndDate) {
+        const startTime = viewStartDate.getTime();
+        const endTime = viewEndDate.getTime();
+
+        sensorPoints = sensorPoints.filter((point) => {
+          const ts = point.timestamp.getTime();
+          // Include points that are within the range (inclusive on both ends)
+          // Add 1 day buffer to endTime to include the entire end day
+          const endTimeWithBuffer = endTime + 24 * 60 * 60 * 1000;
+          return ts >= startTime && ts <= endTimeWithBuffer;
+        });
+      }
+
+      if (sensorPoints.length === 0) return;
+
+      // Calculate actual min/max from data
+      const values = sensorPoints.map((p) => p.value).filter((v) => isFinite(v) && !isNaN(v));
+      if (values.length > 0) {
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        sensorRanges[config.sensorId] = { min, max };
+      }
+    });
+
+    // Second pass: process each sensor with proper normalization
+    SENSOR_CONFIGS.forEach((config) => {
+      if (!selectedSensors.has(config.sensorId)) return;
+
+      // Only use day/night aggregated data points (those with _metadata)
+      // Exclude any hourly hover data that might have been mixed in
+      let sensorPoints = (data[config.sensorId] || []).filter((p) => p._metadata !== undefined);
+
+      // Filter by date range if set
+      if (viewStartDate && viewEndDate) {
+        const startTime = viewStartDate.getTime();
+        const endTime = viewEndDate.getTime();
+
+        sensorPoints = sensorPoints.filter((point) => {
+          const ts = point.timestamp.getTime();
+          // Include points that are within the range (inclusive on both ends)
+          // Add 1 day buffer to endTime to include the entire end day
+          const endTimeWithBuffer = endTime + 24 * 60 * 60 * 1000;
+          return ts >= startTime && ts <= endTimeWithBuffer;
+        });
+      }
+
+      // Sort chronologically
+      sensorPoints.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+      // Re-normalize using actual data range
+      // Normalize to 5-95 scale (with padding) so lines never hit edges
+      // This keeps a 5% margin on each side for clean visualization
+      const range = sensorRanges[config.sensorId];
+      if (range) {
+        const actualMin = range.min;
+        const actualMax = range.max;
+        const rangeSize = actualMax - actualMin;
+
+        // Padding: normalize to 10-90% to keep lines away from edges but use more chart width
+        // Bezier control points extend curves slightly, so we use 10% margins
+        const minPadding = 10;
+        const maxPadding = 90;
+        const paddingRange = maxPadding - minPadding;
+
+        if (rangeSize > 0 && isFinite(actualMin) && isFinite(actualMax)) {
+          sensorPoints = sensorPoints.map((point) => {
+            // Ensure value is within the actual data range
+            const clampedValue = Math.max(actualMin, Math.min(actualMax, point.value));
+
+            let normalizedValue: number;
+            if (config.sensorId.includes("gas") || config.sensorId.includes("lux")) {
+              // Log scale for gas and lux - handle edge cases carefully
+              const positiveMin = Math.max(0.001, actualMin); // Avoid log(0)
+              const positiveValue = Math.max(0.001, clampedValue);
+              const positiveMax = Math.max(positiveMin * 1.001, actualMax); // Ensure max > min
+
+              const logValue = Math.log10(positiveValue);
+              const logMin = Math.log10(positiveMin);
+              const logMax = Math.log10(positiveMax);
+
+              if (logMax <= logMin || !isFinite(logValue) || !isFinite(logMin) || !isFinite(logMax)) {
+                // Fallback to linear if log scale fails
+                const linearNormalized = (clampedValue - actualMin) / rangeSize;
+                normalizedValue = minPadding + linearNormalized * paddingRange;
+              } else {
+                const logNormalized = (logValue - logMin) / (logMax - logMin);
+                normalizedValue = minPadding + logNormalized * paddingRange;
+              }
+            } else {
+              // Linear scale - simple and reliable
+              const linearNormalized = (clampedValue - actualMin) / rangeSize;
+              normalizedValue = minPadding + linearNormalized * paddingRange;
+            }
+
+            // Ensure normalized value is always strictly within padding bounds (10-90)
+            const finalNormalized = Math.max(
+              minPadding,
+              Math.min(maxPadding, isFinite(normalizedValue) ? normalizedValue : 50)
+            );
+
+            return {
+              ...point,
+              normalizedValue: finalNormalized,
+            };
+          });
+        } else {
+          // If range is invalid, set all to middle value (within padding range)
+          sensorPoints = sensorPoints.map((point) => ({
+            ...point,
+            normalizedValue: 50,
+          }));
+        }
+      } else {
+        // No range calculated, set to middle (within padding range)
+        sensorPoints = sensorPoints.map((point) => ({
+          ...point,
+          normalizedValue: 50,
+        }));
+      }
+
+      // Decimate for performance - reduce granularity significantly
+      const viewportHeight = window.innerHeight || 800;
+      // Use more points for smoother curves - approximately 1 point per 3 pixels
+      const maxPoints = Math.max(300, Math.floor(viewportHeight / 3));
+      const decimatedPoints = decimateData(sensorPoints, maxPoints);
+
+      sensorLines.push({
+        sensorId: config.sensorId,
+        points: decimatedPoints,
+        config,
+      });
+    });
+
+    // Calculate time range - use actual data range for positioning, view dates only for filtering
+    let timeStart: number | null = null;
+    let timeEnd: number | null = null;
+    let timeRange: number | null = null;
+
+    // Always use actual day/night data range for timeStart/timeEnd to ensure proper positioning
+    // Only use points from day/night data, not hourly hover data
+    // Filter to ensure we only use day/night aggregated points (those with _metadata)
+    const dayNightPoints = sensorLines.flatMap((line) =>
+      line.points
+        .filter((p) => p._metadata !== undefined)
+        .map((p) => p.timestamp.getTime())
+    );
+
+    if (dayNightPoints.length > 0) {
+      timeStart = Math.min(...dayNightPoints);
+      timeEnd = Math.max(...dayNightPoints); // Points already filtered to exclude current day
+      timeRange = timeEnd - timeStart;
+    } else if (viewStartDate && viewEndDate) {
+      // Fallback to view dates if no data points available
+      timeStart = viewStartDate.getTime();
+      timeEnd = viewEndDate.getTime();
+      timeRange = timeEnd - timeStart;
+    }
+
+    // Chart dimensions - height is unbounded, based on data
+    // Minimal padding following Tufte principles - no top/bottom padding to maximize data display
+    const isMobile = windowWidth < 768;
+    const chartPadding = isMobile
+      ? { top: 0, right: 20, bottom: 0, left: 60 }
+      : { top: 0, right: 30, bottom: 0, left: 80 };
+
+    // Responsive width: full viewport width with minimal margins
+    const chartContentPadding = 0; // No padding on chartContent
+    const maxAvailableWidth = windowWidth - chartContentPadding;
+    const chartWidth = isMobile
+      ? Math.max(320, windowWidth)
+      : Math.min(windowWidth, Math.max(800, windowWidth));
+
+    // Calculate chart height based on days, not hours
+    // Use a fixed pixel height per day for consistent sizing across all time frames
+    const pixelsPerDay = 100; // 100 pixels per day - keeps days same size across all time frames
+
+    let chartHeight: number;
+    if (timeRange && sensorLines.length > 0) {
+      // Calculate based on actual day/night data range only (not hourly hover data)
+      // Filter to only use day/night aggregated points
+      let actualDataStart = Infinity;
+      let actualDataEnd = -Infinity;
+
+      sensorLines.forEach((line) => {
+        // Only consider day/night points (those with _metadata)
+        const dayNightPoints = line.points.filter((p) => p._metadata !== undefined);
+        if (dayNightPoints.length > 0) {
+          // Points are sorted chronologically
+          const lineStart = dayNightPoints[0].timestamp.getTime();
+          const lineEnd = dayNightPoints[dayNightPoints.length - 1].timestamp.getTime();
+          actualDataStart = Math.min(actualDataStart, lineStart);
+          actualDataEnd = Math.max(actualDataEnd, lineEnd);
+        }
+      });
+
+      // Use the actual day/night data range if we have data points
+      const dataRange = actualDataStart < actualDataEnd ? actualDataEnd - actualDataStart : timeRange;
+      const daysInRange = dataRange / (1000 * 60 * 60 * 24);
+
+      // No buffer - let data extend to full height
+      chartHeight = Math.max(600, daysInRange * pixelsPerDay);
+    } else if (timeRange) {
+      // Fallback: use timeRange if we don't have sensor lines yet
+      const daysInRange = timeRange / (1000 * 60 * 60 * 24);
+      chartHeight = Math.max(600, daysInRange * pixelsPerDay);
+    } else {
+      // Fallback to viewport height if no time range
+      chartHeight = 600;
+    }
+
+    // Calculate plot width ensuring it fits within available space
+    const plotWidth = Math.max(0, chartWidth - chartPadding.left - chartPadding.right);
+
+    return {
+      sensorLines,
+      timeRange,
+      timeStart,
+      timeEnd,
+      chartDimensions: {
+        width: chartWidth,
+        height: chartHeight,
+        padding: chartPadding,
+        plotWidth: plotWidth,
+        plotHeight: chartHeight - chartPadding.top - chartPadding.bottom,
+      },
+    };
+  }, [data, selectedSensors, viewStartDate, viewEndDate, windowWidth]);
+
+  // Helper function to evaluate a cubic bezier curve at parameter t (0 to 1)
+  const evaluateBezier = (
+    p0: { x: number; y: number },
+    cp1: { x: number; y: number },
+    cp2: { x: number; y: number },
+    p3: { x: number; y: number },
+    t: number
+  ): { x: number; y: number } => {
+    const mt = 1 - t;
+    const mt2 = mt * mt;
+    const mt3 = mt2 * mt;
+    const t2 = t * t;
+    const t3 = t2 * t;
+
+    return {
+      x: mt3 * p0.x + 3 * mt2 * t * cp1.x + 3 * mt * t2 * cp2.x + t3 * p3.x,
+      y: mt3 * p0.y + 3 * mt2 * t * cp1.y + 3 * mt * t2 * cp2.y + t3 * p3.y,
+    };
   };
 
-  // Performance testing function to benchmark query performance
-  const testQueryPerformance = async () => {
-    console.log("=== Performance Testing ===");
+  // Helper function to find point on bezier curve at a given Y coordinate
+  // Uses binary search to find the t parameter that yields the target Y
+  const findPointOnBezierAtY = (
+    p0: { x: number; y: number },
+    cp1: { x: number; y: number },
+    cp2: { x: number; y: number },
+    p3: { x: number; y: number },
+    targetY: number,
+    tolerance: number = 0.1
+  ): { x: number; y: number } | null => {
+    // Binary search for t value that gives us targetY
+    let low = 0;
+    let high = 1;
+    let bestT = 0.5;
+    let bestDiff = Infinity;
 
-    const testScenarios = [
-      { name: "Last 24 hours", start: new Date(Date.now() - 24 * 60 * 60 * 1000), end: new Date() },
-      { name: "Last 7 days", start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), end: new Date() },
-      { name: "Last 30 days", start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), end: new Date() },
-    ];
+    for (let i = 0; i < 20; i++) {
+      const t = (low + high) / 2;
+      const point = evaluateBezier(p0, cp1, cp2, p3, t);
+      const diff = Math.abs(point.y - targetY);
 
-    for (const scenario of testScenarios) {
-      console.log(`\n🧪 Testing: ${scenario.name}`);
-      const startTime = performance.now();
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestT = t;
+      }
 
-      try {
-        const data = await fetchOptimizedData(scenario.start, scenario.end);
-        const endTime = performance.now();
-        const duration = endTime - startTime;
+      if (diff < tolerance) {
+        return point;
+      }
 
-        console.log(
-          `✅ ${scenario.name}: ${duration.toFixed(2)}ms, ${data ? Object.values(data).flat().length : 0} data points`
-        );
-      } catch (error) {
-        console.error(`❌ ${scenario.name}: Failed - ${error}`);
+      if (point.y < targetY) {
+        low = t;
+      } else {
+        high = t;
       }
     }
 
-    console.log("=== Performance Testing Complete ===");
+    // Return best approximation
+    return evaluateBezier(p0, cp1, cp2, p3, bestT);
   };
 
-  // Call optimization suggestions on mount
-  useEffect(() => {
-    console.log("🚀 VerticalTimeline component mounted");
-    console.log("Container ref on mount:", containerRef.current);
-    console.log("SVG ref on mount:", svgRef.current);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [hoverState, setHoverState] = useState<{
+    x: number;
+    y: number;
+    timestamp: Date;
+    sensors: Array<{ sensorId: string; value: number; normalizedValue: number; config: SensorConfig }>;
+    hoveredSensorId: string | null; // Track which sensor line is being hovered
+    hourlyData?: DataPoint[]; // Hourly data for the hovered point
+  } | null>(null);
+  const [hoverHourlyData, setHoverHourlyData] = useState<Record<string, DataPoint[]>>({});
 
-    suggestDatabaseOptimizations();
-    // Run performance test after a delay
-    setTimeout(testQueryPerformance, 2000);
+  // Handle mouse move for tooltip - detect which line is closest
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<SVGSVGElement>) => {
+      if (!timelineData.chartDimensions || !svgRef.current) return;
+
+      const svg = svgRef.current;
+      const rect = svg.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const { padding, plotWidth, plotHeight } = timelineData.chartDimensions;
+      const { timeStart, timeEnd, timeRange } = timelineData;
+
+      // Check if within plot area
+      if (
+        x < padding.left ||
+        x > padding.left + plotWidth ||
+        y < padding.top ||
+        y > padding.top + plotHeight ||
+        !timeStart ||
+        !timeEnd ||
+        !timeRange
+      ) {
+        setHoverState(null);
+        return;
+      }
+
+      // Calculate timestamp from Y position
+      const plotY = y - padding.top;
+      const timeRatio = 1 - plotY / plotHeight; // Invert so top is newest
+      const hoverTimestamp = timeStart + timeRange * timeRatio;
+
+      // Find the closest sensor line to the mouse X position
+      let closestLine: { line: (typeof timelineData.sensorLines)[0]; distance: number } | null = null;
+
+      for (const line of timelineData.sensorLines) {
+        // Find the point on this line closest to the hover timestamp
+        let closestPoint: DataPoint | null = null;
+        let minTimeDistance = Infinity;
+
+        for (const point of line.points) {
+          const timeDistance = Math.abs(point.timestamp.getTime() - hoverTimestamp);
+          if (timeDistance < minTimeDistance) {
+            minTimeDistance = timeDistance;
+            closestPoint = point;
+          }
+        }
+
+        if (closestPoint) {
+          // Calculate the X position of this point on the chart
+          const pointX = padding.left + (plotWidth * closestPoint.normalizedValue) / 100;
+          // Calculate distance from mouse X to this point's X
+          const xDistance = Math.abs(x - pointX);
+
+          if (!closestLine || xDistance < closestLine.distance) {
+            closestLine = { line, distance: xDistance };
+          }
+        }
+      }
+
+      // Only show data for the closest sensor line
+      const sensors: Array<{ sensorId: string; value: number; normalizedValue: number; config: SensorConfig }> = [];
+      let closestPoint: DataPoint | null = null;
+
+      if (closestLine) {
+        // Find closest point to hover timestamp for the hovered line
+        let minDistance = Infinity;
+
+        for (const point of closestLine.line.points) {
+          const distance = Math.abs(point.timestamp.getTime() - hoverTimestamp);
+          if (distance < minDistance) {
+            minDistance = distance;
+            closestPoint = point;
+          }
+        }
+
+        if (closestPoint) {
+          sensors.push({
+            sensorId: closestLine.line.sensorId,
+            value: closestPoint.value,
+            normalizedValue: closestPoint.normalizedValue,
+            config: closestLine.line.config,
+          });
+
+          // If this is a day/night point with metadata, fetch hourly data on hover
+          if (
+            closestPoint._metadata &&
+            !hoverHourlyData[`${closestPoint._metadata.date}-${closestPoint._metadata.period}`]
+          ) {
+            const metadata = closestPoint._metadata;
+            const date = new Date(metadata.date);
+            fetchHourlyDataForHover(date, metadata.period).then((hourlyPoints) => {
+              if (hourlyPoints.length > 0) {
+                setHoverHourlyData((prev) => ({
+                  ...prev,
+                  [`${metadata.date}-${metadata.period}`]: hourlyPoints,
+                }));
+              }
+            });
+          }
+        }
+      }
+
+      // Get hourly data if available for the hovered point
+      let hourlyDataForHover: DataPoint[] | undefined;
+      if (closestPoint?._metadata) {
+        const key = `${closestPoint._metadata.date}-${closestPoint._metadata.period}`;
+        hourlyDataForHover = hoverHourlyData[key];
+      }
+
+      setHoverState({
+        x: e.clientX,
+        y: e.clientY,
+        timestamp: new Date(hoverTimestamp),
+        sensors,
+        hoveredSensorId: closestLine?.line.sensorId || null,
+        hourlyData: hourlyDataForHover,
+      });
+    },
+    [timelineData, fetchHourlyDataForHover, hoverHourlyData]
+  );
+
+  const handleMouseLeave = useCallback(() => {
+    setHoverState(null);
   }, []);
 
+  // Helper to get current days value for URL
+  const getCurrentDaysValue = useCallback((): number | null => {
+    if (!viewStartDate || !viewEndDate || !timeRange) return null;
+    const daysDiff = Math.round((viewEndDate.getTime() - viewStartDate.getTime()) / (1000 * 60 * 60 * 24));
+    // Check if it matches common presets
+    if (Math.abs(daysDiff - 7) < 1) return 7;
+    if (Math.abs(daysDiff - 30) < 1) return 30;
+    if (Math.abs(daysDiff - 90) < 1) return 90;
+    // Check if showing all data
+    if (!viewStartDate && !viewEndDate) return null;
+    return daysDiff;
+  }, [viewStartDate, viewEndDate, timeRange]);
+
+  // Toggle sensor visibility
+  const toggleSensor = useCallback(
+    (sensorId: string) => {
+      setSelectedSensors((prev) => {
+        const next = new Set(prev);
+        if (next.has(sensorId)) {
+          next.delete(sensorId);
+        } else {
+          next.add(sensorId);
+        }
+
+        // Update URL with new sensor selection
+        const currentDays = getCurrentDaysValue();
+        updateURLParams(next, currentDays);
+
+        return next;
+      });
+    },
+    [updateURLParams, getCurrentDaysValue]
+  );
+
+  // Date range controls
+  const setDateRange = useCallback(
+    (days: number) => {
+      if (!timeRange) return;
+
+      // Use the latest available data point as the end
+      const dataEnd = new Date(timeRange.end);
+      const dataStart = new Date(timeRange.start);
+
+      // Calculate start date N days before end
+      const calculatedStart = new Date(dataEnd.getTime() - days * 24 * 60 * 60 * 1000);
+
+      // Clamp start to actual data range (don't go before available data)
+      const start = calculatedStart < dataStart ? dataStart : calculatedStart;
+      const end = dataEnd;
+
+      setViewStartDate(start);
+      setViewEndDate(end);
+
+      // Update URL
+      updateURLParams(selectedSensors, days);
+    },
+    [timeRange, selectedSensors, updateURLParams]
+  );
+
+  // Apply initial days from URL after data is loaded
+  useEffect(() => {
+    if (!isLoading && timeRange && initialDays !== null && !viewStartDate && !viewEndDate) {
+      setDateRange(initialDays);
+    }
+  }, [isLoading, timeRange, initialDays, viewStartDate, viewEndDate, setDateRange]);
+
+  const showAllTime = useCallback(async () => {
+    // Clear view dates to show all available data (not limited to 90 days)
+    setViewStartDate(null);
+    setViewEndDate(null);
+
+    // Update URL
+    updateURLParams(selectedSensors, null);
+
+    // Reload data using the full view (not the recent view)
+    // This will fetch all available data in pages
+    setIsLoading(true);
+    setIsLoadingMore(false);
+    setLoadedPages(0);
+    setData({});
+
+    try {
+      const pageSize = 1000; // Smaller page size for full view to avoid timeouts
+
+      // Start with first page of full view
+      const result = await fetchDataPage(undefined, undefined, 0, pageSize, false); // Use full view
+
+      if (result.data && result.data.length > 0) {
+        const processedData = processRawData(result.data);
+        const total = result.totalCount || result.data.length;
+        const pages = Math.ceil(total / pageSize);
+        setTotalPages(pages);
+
+        setData(processedData);
+        setLoadedPages(1);
+
+        // Calculate time range
+        const allTimestamps = Object.values(processedData)
+          .flat()
+          .map((p: DataPoint) => p.timestamp);
+
+        if (allTimestamps.length > 0) {
+          const firstPageEnd = new Date(Math.max(...allTimestamps.map((t: Date) => t.getTime())));
+          const firstPageStart = new Date(Math.min(...allTimestamps.map((t: Date) => t.getTime())));
+
+          // SQL query already excludes current day, use data as-is
+          const fullEnd = new Date(firstPageEnd);
+          fullEnd.setHours(23, 59, 59, 999);
+
+          // For full view, we'll set start to the first page start
+          // More pages will extend it backward as they load
+          setTimeRange({ start: firstPageStart, end: fullEnd });
+        }
+
+        // Load remaining pages in background
+        if (pages > 1) {
+          loadRemainingPages(pages, pageSize, false); // Use full view
+        }
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to load all data";
+      setError(`Failed to load all data: ${errorMessage}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchDataPage, processRawData, loadRemainingPages, selectedSensors, updateURLParams]);
+
+  // Helper functions for active states
+  const isDateRangeActive = useCallback(
+    (days: number) => {
+      if (!timeRange || !viewStartDate || !viewEndDate) return false;
+      const now = timeRange.end;
+      const expectedStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+      const startDiff = Math.abs(viewStartDate.getTime() - expectedStart.getTime());
+      const endDiff = Math.abs(viewEndDate.getTime() - now.getTime());
+      // Allow 1 hour tolerance for rounding
+      return startDiff < 60 * 60 * 1000 && endDiff < 60 * 60 * 1000;
+    },
+    [timeRange, viewStartDate, viewEndDate]
+  );
+
+  const isAllTimeActive = useCallback(() => {
+    // All is active when view dates are null (showing all available data)
+    return !viewStartDate && !viewEndDate;
+  }, [viewStartDate, viewEndDate]);
+
+  if (isLoading) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>Loading timeline data...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.error}>{error}</div>
+      </div>
+    );
+  }
+
+  if (!timelineData.chartDimensions || timelineData.sensorLines.length === 0) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.controls}>
+          <div className={styles.controlsSection}>
+            <h2 className={styles.title}>Sensor Timeline</h2>
+          </div>
+        </div>
+        <div className={styles.error}>
+          {error || "No data available"}
+          <div style={{ marginTop: "1rem", fontSize: "0.875rem", opacity: 0.8 }}>
+            Check the browser console for detailed error messages.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={styles.timelineContainer} style={{ height }}>
-      <div className={styles.header}>
-        <div>
-          <h3>Sensor Timeline</h3>
-          <div className={styles.instructions}>
-            <span>Scroll to zoom • Drag to pan • Click "Load Data" to explore specific time ranges</span>
+    <div className={styles.container}>
+      {/* Fixed controls at top */}
+      <div className={styles.controls}>
+        <div className={styles.controlsHeader}>
+          <div className={styles.headerLeft}>
+            <h1 className={styles.title}>Environmental Timeline</h1>
+            {viewStartDate && viewEndDate && (
+              <div className={styles.dateRange}>
+                <span className={styles.dateRangeText}>
+                  {viewStartDate.toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}{" "}
+                  –{" "}
+                  {viewEndDate.toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </span>
+                {isLoadingMore && totalPages && (
+                  <span className={styles.dateRangeLabel} style={{ marginLeft: "0.75rem" }}>
+                    ({loadedPages}/{totalPages})
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
-        <div className={styles.zoomInfo}>
-          {zoomLevel > 1 && `Zoom: ${zoomLevel.toFixed(1)}x`}
-          {currentTimeRange && (
-            <span>
-              {currentTimeRange.start.toLocaleDateString()} - {currentTimeRange.end.toLocaleDateString()}
-            </span>
-          )}
-          {fullTimeRange && currentTimeRange && (
-            <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>
-              {Math.max(
-                0,
-                Math.min(
-                  100,
-                  Math.round(
-                    ((currentTimeRange.end.getTime() - currentTimeRange.start.getTime()) /
-                      (fullTimeRange.end.getTime() - fullTimeRange.start.getTime())) *
-                      100
-                  )
-                )
-              )}
-              % of total
-            </span>
-          )}
-        </div>
-        <div className={styles.headerButtons}>
-          <button onClick={loadDataForCurrentView} className={styles.loadButton} disabled={isLoadingData}>
-            {isLoadingData ? "Loading..." : "Load Data"}
-          </button>
-          <button onClick={manualZoomTest} className={styles.loadButton} style={{ backgroundColor: "#28a745" }}>
-            Manual Zoom
-          </button>
-          <button onClick={testZoom} className={styles.loadButton} style={{ backgroundColor: "#ffc107" }}>
-            Test Zoom
-          </button>
-          <button onClick={resetZoom} className={styles.refreshButton}>
-            Reset View
-          </button>
-          <button onClick={debugCurrentState} className={styles.loadButton} style={{ backgroundColor: "#007bff" }}>
-            Debug State
-          </button>
-          <button onClick={testShowAllData} className={styles.loadButton} style={{ backgroundColor: "#dc3545" }}>
-            Show All Data
-          </button>
+
+        <div className={styles.controlsBody}>
+          <div className={styles.controlGroup}>
+            <label className={styles.controlLabel}>Time Range</label>
+            <div className={styles.dateButtons}>
+              <button
+                onClick={() => setDateRange(7)}
+                className={`${styles.dateButton} ${isDateRangeActive(7) ? styles.dateButtonActive : ""}`}
+              >
+                7d
+              </button>
+              <button
+                onClick={() => setDateRange(30)}
+                className={`${styles.dateButton} ${isDateRangeActive(30) ? styles.dateButtonActive : ""}`}
+              >
+                30d
+              </button>
+              <button
+                onClick={() => setDateRange(90)}
+                className={`${styles.dateButton} ${isDateRangeActive(90) ? styles.dateButtonActive : ""}`}
+              >
+                90d
+              </button>
+              <button
+                onClick={showAllTime}
+                className={`${styles.dateButton} ${isAllTimeActive() ? styles.dateButtonActive : ""}`}
+              >
+                All
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.controlGroup}>
+            <label className={styles.controlLabel}>Sensors</label>
+            <div className={styles.sensorLegend}>
+              {SENSOR_CONFIGS.map((config) => {
+                const isActive = selectedSensors.has(config.sensorId);
+                return (
+                  <button
+                    key={config.sensorId}
+                    onClick={() => toggleSensor(config.sensorId)}
+                    className={`${styles.sensorButton} ${
+                      isActive ? styles.sensorButtonActive : styles.sensorButtonInactive
+                    }`}
+                    aria-pressed={isActive}
+                    title={`${isActive ? "Hide" : "Show"} ${config.name}`}
+                  >
+                    <div
+                      className={styles.sensorColor}
+                      style={{
+                        backgroundColor: config.color,
+                        opacity: isActive ? 1 : 0.3,
+                      }}
+                    />
+                    <span>{config.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className={`${styles.chartContainer} ${isZooming ? styles.zooming : ""}`} ref={containerRef}>
-        {isZooming && (
-          <div className={styles.zoomIndicator}>
-            <span>Zooming...</span>
+      {/* Chart content */}
+      <div className={styles.chartContent}>
+        {timelineData.chartDimensions && (
+          <div className={styles.chartWrapper}>
+            <svg
+              ref={svgRef}
+              width={timelineData.chartDimensions.width}
+              height={timelineData.chartDimensions.height}
+              className={styles.chartSvg}
+              onMouseMove={handleMouseMove}
+              onMouseLeave={handleMouseLeave}
+              viewBox={`0 0 ${timelineData.chartDimensions.width} ${timelineData.chartDimensions.height}`}
+              preserveAspectRatio='xMidYMid meet'
+            >
+              <defs>
+                {/* Clip path to prevent overflow */}
+                <clipPath id='chartClip'>
+                  <rect
+                    x='0'
+                    y='0'
+                    width={timelineData.chartDimensions.width}
+                    height={timelineData.chartDimensions.height}
+                  />
+                </clipPath>
+              </defs>
+
+              {/* Clip all chart content to prevent overflow */}
+              <g clipPath='url(#chartClip)'>
+                {/* Day/Night banding background */}
+                {timelineData.timeStart &&
+                  timelineData.timeEnd &&
+                  timelineData.timeRange &&
+                  (() => {
+                    const bands: Array<{ y: number; height: number; isDay: boolean }> = [];
+                    const startTime = timelineData.timeStart!;
+                    const endTime = timelineData.timeEnd!;
+                    const timeRange = timelineData.timeRange!;
+                    const padding = timelineData.chartDimensions.padding;
+                    const plotHeight = timelineData.chartDimensions.plotHeight;
+
+                    // Calculate Y position helper (time goes from newest at top to oldest at bottom)
+                    const getY = (time: number) => {
+                      const timeRatio = 1 - (time - startTime) / timeRange;
+                      return padding.top + plotHeight * Math.max(0, Math.min(1, timeRatio));
+                    };
+
+                    // Use the actual data range or view range
+                    const rangeStart = Math.max(startTime, viewStartDate?.getTime() || startTime);
+                    const rangeEnd = Math.min(
+                      endTime,
+                      viewEndDate?.getTime() || endTime
+                    );
+
+                    // Iterate day by day, creating day and night bands
+                    let currentDay = new Date(rangeStart);
+                    currentDay.setHours(0, 0, 0, 0);
+
+                    while (currentDay.getTime() < rangeEnd) {
+                      const dayStart = new Date(currentDay);
+                      dayStart.setHours(6, 0, 0, 0); // 6 AM - start of day period
+
+                      const dayEnd = new Date(currentDay);
+                      dayEnd.setHours(18, 0, 0, 0); // 6 PM - end of day period
+
+                      const nightStart = new Date(currentDay);
+                      if (currentDay.getTime() < dayStart.getTime()) {
+                        // Before 6 AM - this is the night period from previous day
+                        nightStart.setDate(nightStart.getDate() - 1);
+                        nightStart.setHours(18, 0, 0, 0); // Started at 6 PM yesterday
+                      } else {
+                        nightStart.setHours(18, 0, 0, 0); // Starts at 6 PM today
+                      }
+
+                      const nightEnd = new Date(currentDay);
+                      nightEnd.setDate(nightEnd.getDate() + 1);
+                      nightEnd.setHours(6, 0, 0, 0); // Ends at 6 AM next day
+
+                      // Create day band (6 AM - 6 PM)
+                      const dayBandStart = Math.max(rangeStart, dayStart.getTime());
+                      const dayBandEnd = Math.min(rangeEnd, dayEnd.getTime());
+                      if (dayBandStart < dayBandEnd) {
+                        const y = getY(dayBandEnd);
+                        const height = getY(dayBandStart) - y;
+                        if (height > 0) {
+                          bands.push({ y, height, isDay: true });
+                        }
+                      }
+
+                      // Create night band (6 PM - 6 AM next day)
+                      const nightBandStart = Math.max(rangeStart, nightStart.getTime());
+                      const nightBandEnd = Math.min(rangeEnd, nightEnd.getTime());
+                      if (nightBandStart < nightBandEnd) {
+                        const y = getY(nightBandEnd);
+                        const height = getY(nightBandStart) - y;
+                        if (height > 0) {
+                          bands.push({ y, height, isDay: false });
+                        }
+                      }
+
+                      // Move to next day
+                      currentDay.setDate(currentDay.getDate() + 1);
+                    }
+
+                    // Very minimal day/night banding - almost invisible
+                    return bands.map((band, idx) => (
+                      <rect
+                        key={`band-${idx}`}
+                        x={padding.left}
+                        y={band.y}
+                        width={timelineData.chartDimensions.plotWidth}
+                        height={band.height}
+                        fill={band.isDay ? "transparent" : "rgba(0, 0, 0, 0.005)"}
+                      />
+                    ));
+                  })()}
+
+                {/* No grid - Tufte principle: remove non-data ink */}
+
+                {/* Y-axis (time) - vertical */}
+                {timelineData.timeStart && timelineData.timeEnd && timelineData.timeRange && (
+                  <>
+                    {/* Y-axis line - minimal */}
+                    <line
+                      x1={timelineData.chartDimensions.padding.left}
+                      y1={timelineData.chartDimensions.padding.top}
+                      x2={timelineData.chartDimensions.padding.left}
+                      y2={timelineData.chartDimensions.padding.top + timelineData.chartDimensions.plotHeight}
+                      stroke='var(--text-secondary)'
+                      strokeWidth='0.5'
+                      opacity='0.2'
+                    />
+
+                    {/* Calculate day boundaries for delimiters */}
+                    {(() => {
+                      const days: Array<{ date: Date; y: number }> = [];
+                      const startTime = timelineData.timeStart!;
+                      const endTime = timelineData.timeEnd!;
+                      const timeRange = timelineData.timeRange!;
+
+                      // Use viewStartDate and viewEndDate to determine which days to show
+                      // This ensures we show all days in the selected range, not just days with data
+                      const rangeStart = viewStartDate ? new Date(viewStartDate) : new Date(startTime);
+                      const rangeEnd = viewEndDate ? new Date(viewEndDate) : new Date(endTime);
+
+                      // Start from midnight of the start date
+                      let currentDay = new Date(rangeStart);
+                      currentDay.setHours(0, 0, 0, 0);
+
+                      // If start date is not at midnight, we still want to show that day
+                      // So we start from the midnight of that day
+                      if (currentDay.getTime() < rangeStart.getTime()) {
+                        // Start date is later in the day, show that day boundary
+                        const startDayMidnight = new Date(rangeStart);
+                        startDayMidnight.setHours(0, 0, 0, 0);
+                        currentDay = startDayMidnight;
+                      }
+
+                      // Include all days from start to end (inclusive)
+                      const endDayMidnight = new Date(rangeEnd);
+                      endDayMidnight.setHours(0, 0, 0, 0);
+                      const finalEndTime = endDayMidnight.getTime() + 24 * 60 * 60 * 1000; // End of end day
+
+                      while (currentDay.getTime() <= finalEndTime) {
+                        const dayTime = currentDay.getTime();
+
+                        // Calculate Y position based on the actual chart time range
+                        // Clamp to chart bounds
+                        let timeRatio: number;
+                        if (dayTime < startTime) {
+                          // Before chart start, clamp to top
+                          timeRatio = 1;
+                        } else if (dayTime > endTime) {
+                          // After chart end, clamp to bottom
+                          timeRatio = 0;
+                        } else {
+                          // Within chart range
+                          timeRatio = 1 - (dayTime - startTime) / timeRange;
+                        }
+
+                        const y =
+                          timelineData.chartDimensions.padding.top +
+                          timelineData.chartDimensions.plotHeight * timeRatio;
+
+                        // Clamp Y to chart bounds
+                        const clampedY = Math.max(
+                          timelineData.chartDimensions.padding.top,
+                          Math.min(
+                            timelineData.chartDimensions.padding.top + timelineData.chartDimensions.plotHeight,
+                            y
+                          )
+                        );
+
+                        days.push({ date: new Date(currentDay), y: clampedY });
+
+                        // Move to next day
+                        currentDay.setDate(currentDay.getDate() + 1);
+                        currentDay.setHours(0, 0, 0, 0);
+                      }
+
+                      return days;
+                    })().map((day) => (
+                      <g key={`day-${day.date.getTime()}`}>
+                        {/* Day delimiter - minimal line */}
+                        <line
+                          x1={timelineData.chartDimensions.padding.left}
+                          y1={day.y}
+                          x2={timelineData.chartDimensions.padding.left + timelineData.chartDimensions.plotWidth}
+                          y2={day.y}
+                          stroke='var(--text-secondary)'
+                          strokeWidth='0.5'
+                          opacity='0.15'
+                        />
+                        {/* Day label - aligned right at axis */}
+                        <text
+                          x={timelineData.chartDimensions.padding.left - 6}
+                          y={day.y - 4}
+                          textAnchor='end'
+                          fill='var(--text-secondary)'
+                          fontSize='10'
+                          fontWeight='400'
+                          opacity='0.6'
+                        >
+                          {day.date.toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: day.date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+                          })}
+                        </text>
+                      </g>
+                    ))}
+                  </>
+                )}
+
+                {/* X-axis lines - minimal */}
+                <line
+                  x1={timelineData.chartDimensions.padding.left}
+                  y1={timelineData.chartDimensions.padding.top + timelineData.chartDimensions.plotHeight}
+                  x2={timelineData.chartDimensions.padding.left + timelineData.chartDimensions.plotWidth}
+                  y2={timelineData.chartDimensions.padding.top + timelineData.chartDimensions.plotHeight}
+                  stroke='var(--text-secondary)'
+                  strokeWidth='0.5'
+                  opacity='0.15'
+                />
+                <line
+                  x1={timelineData.chartDimensions.padding.left}
+                  y1={timelineData.chartDimensions.padding.top}
+                  x2={timelineData.chartDimensions.padding.left + timelineData.chartDimensions.plotWidth}
+                  y2={timelineData.chartDimensions.padding.top}
+                  stroke='var(--text-secondary)'
+                  strokeWidth='0.5'
+                  opacity='0.15'
+                />
+
+                {/* Sensor lines */}
+                {timelineData.sensorLines.map((line) => {
+                  if (!timelineData.timeStart || !timelineData.timeEnd || !timelineData.timeRange) return null;
+                  if (line.points.length < 2) return null;
+
+                  // Convert points to SVG coordinates, ensuring they're sorted by time (Y coordinate)
+                  // Also find min/max normalized values to extend lines to edges
+                  let minNormalized = Infinity;
+                  let maxNormalized = -Infinity;
+
+                  const svgPoints = line.points
+                    .map((point) => {
+                      const timeRatio =
+                        1 - (point.timestamp.getTime() - timelineData.timeStart!) / timelineData.timeRange!;
+                      const y =
+                        timelineData.chartDimensions.padding.top + timelineData.chartDimensions.plotHeight * timeRatio;
+
+                      // normalizedValue should already be 10-90 (with padding), clamp to be safe
+                      const clampedNormalized = Math.max(10, Math.min(90, point.normalizedValue));
+
+                      // Calculate X position - map from 10-90 normalized range to plot width
+                      // Direct mapping: 10% normalized = 10% from left edge of plot
+                      const plotLeft = timelineData.chartDimensions.padding.left;
+                      const normalizedRatio = clampedNormalized / 100; // Convert 10-90% to 0.1-0.9 ratio
+                      const x = plotLeft + timelineData.chartDimensions.plotWidth * normalizedRatio;
+
+                      minNormalized = Math.min(minNormalized, clampedNormalized);
+                      maxNormalized = Math.max(maxNormalized, clampedNormalized);
+
+                      return { x, y, timestamp: point.timestamp.getTime(), normalizedValue: clampedNormalized };
+                    })
+                    .sort((a, b) => a.timestamp - b.timestamp); // Ensure chronological order
+
+                  // Don't extend lines vertically - this causes flat edges
+                  // Lines should only use actual data points
+                  // Use the points directly for rendering
+                  const finalSvgPoints = svgPoints.map(({ x, y }) => ({ x, y })); // Remove timestamp after processing
+
+                  // Store bezier segments for hover calculation
+                  type BezierSegment = {
+                    p0: { x: number; y: number };
+                    cp1: { x: number; y: number };
+                    cp2: { x: number; y: number };
+                    p3: { x: number; y: number };
+                    startY: number;
+                    endY: number;
+                  };
+
+                  const bezierSegments: BezierSegment[] = [];
+
+                  // Create perfectly smooth curve using improved Catmull-Rom with tension control
+                  // Ensures C1 continuity (no sharp angles) and strict X bounds
+                  const createSmoothPath = (points: Array<{ x: number; y: number }>): string => {
+                    if (points.length === 0) return "";
+                    if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+                    if (points.length === 2) {
+                      // For 2 points, use a simple smooth bezier with clamped control points
+                      const p1 = points[0];
+                      const p2 = points[1];
+                      const dx = p2.x - p1.x;
+                      const dy = p2.y - p1.y;
+                      let cp1x = p1.x + dx / 3;
+                      let cp1y = p1.y + dy / 3;
+                      let cp2x = p2.x - dx / 3;
+                      let cp2y = p2.y - dy / 3;
+
+                      // Strictly clamp control points to match data normalization bounds (30% margin)
+                      const plotLeft = timelineData.chartDimensions.padding.left;
+                      const plotRight = plotLeft + timelineData.chartDimensions.plotWidth;
+                      const controlMarginPercent = 0.3; // Match data normalization (30%)
+                      const innerLeft = plotLeft + timelineData.chartDimensions.plotWidth * controlMarginPercent;
+                      const innerRight = plotRight - timelineData.chartDimensions.plotWidth * controlMarginPercent;
+                      cp1x = Math.max(innerLeft, Math.min(innerRight, cp1x));
+                      cp2x = Math.max(innerLeft, Math.min(innerRight, cp2x));
+
+                      bezierSegments.push({
+                        p0: p1,
+                        cp1: { x: cp1x, y: cp1y },
+                        cp2: { x: cp2x, y: cp2y },
+                        p3: p2,
+                        startY: Math.min(p1.y, p2.y),
+                        endY: Math.max(p1.y, p2.y),
+                      });
+
+                      return `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+                    }
+
+                    let path = `M ${points[0].x} ${points[0].y}`;
+                    bezierSegments.length = 0;
+
+                    const plotLeft = timelineData.chartDimensions.padding.left;
+                    const plotRight = plotLeft + timelineData.chartDimensions.plotWidth;
+
+                    // Calculate inner bounds for bezier control points
+                    // Data points are normalized to 10-90% of plot width
+                    // Control points need to stay within bounds to prevent curve extension beyond edges
+                    const controlMarginPercent = 0.10; // Match data normalization margin (10%)
+                    const innerLeft = plotLeft + timelineData.chartDimensions.plotWidth * controlMarginPercent;
+                    const innerRight = plotRight - timelineData.chartDimensions.plotWidth * controlMarginPercent;
+
+                    // Use tension-controlled Catmull-Rom spline for smoother curves
+                    // Lower tension = smoother, less aggressive curves
+                    const tension = 0.5; // Adjust for smoothness (0.3-0.7 range works well)
+
+                    for (let i = 0; i < points.length - 1; i++) {
+                      const p0 = i > 0 ? points[i - 1] : points[i];
+                      const p1 = points[i];
+                      const p2 = points[i + 1];
+                      const p3 = i < points.length - 2 ? points[i + 2] : points[i + 1];
+
+                      // Clamp all input points to data bounds (10-90% of plot width)
+                      // This matches the normalization bounds
+                      const dataMarginPercent = 0.10;
+                      const dataLeft = plotLeft + timelineData.chartDimensions.plotWidth * dataMarginPercent;
+                      const dataRight = plotRight - timelineData.chartDimensions.plotWidth * dataMarginPercent;
+                      const clampedP1 = { x: Math.max(dataLeft, Math.min(dataRight, p1.x)), y: p1.y };
+                      const clampedP2 = { x: Math.max(dataLeft, Math.min(dataRight, p2.x)), y: p2.y };
+
+                      // Improved Catmull-Rom with tension control
+                      // Use tension to make curves smoother and less sharp
+                      const t = tension;
+                      const clampedP0 = i > 0 ? Math.max(dataLeft, Math.min(dataRight, p0.x)) : clampedP1.x;
+                      const clampedP3 =
+                        i < points.length - 2 ? Math.max(dataLeft, Math.min(dataRight, p3.x)) : clampedP2.x;
+
+                      const dx1 = (clampedP2.x - clampedP0) * t;
+                      const dy1 = (clampedP2.y - (i > 0 ? p0.y : clampedP1.y)) * t;
+                      const dx2 = (clampedP3 - clampedP1.x) * t;
+                      const dy2 = ((i < points.length - 2 ? p3.y : clampedP2.y) - clampedP1.y) * t;
+
+                      // Control points for smooth cubic bezier
+                      let cp1x = clampedP1.x + dx1 / 3;
+                      let cp1y = clampedP1.y + dy1 / 3;
+                      let cp2x = clampedP2.x - dx2 / 3;
+                      let cp2y = clampedP2.y - dy2 / 3;
+
+                      // CRITICAL: Strictly clamp all X coordinates to inner bounds
+                      // innerLeft and innerRight are already calculated above
+                      cp1x = Math.max(innerLeft, Math.min(innerRight, cp1x));
+                      cp2x = Math.max(innerLeft, Math.min(innerRight, cp2x));
+
+                      // Points are already clamped to inner bounds, use them directly
+                      const finalP1 = clampedP1;
+                      const finalP2 = clampedP2;
+
+                      // Ensure Y progression is monotonic (time flows forward)
+                      const yDelta = finalP2.y - finalP1.y;
+
+                      if (yDelta !== 0) {
+                        // Keep control points between p1.y and p2.y for smooth, monotonic curves
+                        const minY = Math.min(finalP1.y, finalP2.y);
+                        const maxY = Math.max(finalP1.y, finalP2.y);
+
+                        // Constrain Y values more strictly to prevent backtracking
+                        cp1y = Math.max(minY, Math.min(maxY, cp1y));
+                        cp2y = Math.max(minY, Math.min(maxY, cp2y));
+
+                        // Ensure progression order to prevent loops or sharp angles
+                        if (yDelta > 0) {
+                          // Moving down (forward in time) - ensure smooth progression
+                          if (cp2y < cp1y) {
+                            // If control points are reversed, smooth them out
+                            const midY = (finalP1.y + finalP2.y) / 2;
+                            cp1y = Math.min(cp1y, midY);
+                            cp2y = Math.max(cp2y, midY);
+                          }
+                          // Ensure cp1 and cp2 are between p1 and p2
+                          if (cp1y > finalP2.y) cp1y = finalP1.y + yDelta * 0.3;
+                          if (cp2y < finalP1.y) cp2y = finalP1.y + yDelta * 0.7;
+                        }
+                      } else {
+                        // Horizontal segment - keep Y constant
+                        cp1y = finalP1.y;
+                        cp2y = finalP2.y;
+                      }
+
+                      const cp1 = { x: cp1x, y: cp1y };
+                      const cp2 = { x: cp2x, y: cp2y };
+
+                      // Store segment for hover calculation
+                      bezierSegments.push({
+                        p0: finalP1,
+                        cp1,
+                        cp2,
+                        p3: finalP2,
+                        startY: Math.min(finalP1.y, finalP2.y, cp1y, cp2y),
+                        endY: Math.max(finalP1.y, finalP2.y, cp1y, cp2y),
+                      });
+
+                      // Use cubic bezier for perfectly smooth curves
+                      path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${finalP2.x} ${finalP2.y}`;
+                    }
+
+                    return path;
+                  };
+
+                  const isHovered = hoverState?.hoveredSensorId === line.sensorId;
+                  const pathData = createSmoothPath(finalSvgPoints);
+
+                  // Store bezier segments in a ref or attach to the line object for hover calculation
+                  // We'll use a closure to access segments when rendering hover indicators
+                  (line as any)._bezierSegments = bezierSegments;
+
+                  return (
+                    <path
+                      key={line.sensorId}
+                      d={pathData}
+                      fill='none'
+                      stroke={line.config.color}
+                      strokeWidth={isHovered ? "2" : "1.5"}
+                      strokeLinecap='round'
+                      strokeLinejoin='round'
+                      opacity={hoverState && !isHovered ? 0.2 : 0.85}
+                      style={{
+                        cursor: "pointer",
+                        transition: "opacity 0.15s, stroke-width 0.15s",
+                      }}
+                    />
+                  );
+                })}
+
+                {/* Hover indicator line */}
+                {hoverState &&
+                  timelineData.chartDimensions &&
+                  timelineData.timeStart &&
+                  timelineData.timeEnd &&
+                  timelineData.timeRange && (
+                    <>
+                      {(() => {
+                        // Calculate min/max X positions of all visible sensor lines at this Y position
+                        // to constrain the hover line to only extend as far as the data lines
+                        const targetY =
+                          timelineData.chartDimensions.padding.top +
+                          (1 - (hoverState.timestamp.getTime() - timelineData.timeStart) / timelineData.timeRange) *
+                            timelineData.chartDimensions.plotHeight;
+
+                        let minX = timelineData.chartDimensions.padding.left + timelineData.chartDimensions.plotWidth;
+                        let maxX = timelineData.chartDimensions.padding.left;
+
+                        timelineData.sensorLines.forEach((line) => {
+                          const bezierSegments = (line as any)._bezierSegments as Array<{
+                            p0: { x: number; y: number };
+                            cp1: { x: number; y: number };
+                            cp2: { x: number; y: number };
+                            p3: { x: number; y: number };
+                            startY: number;
+                            endY: number;
+                          }>;
+
+                          if (bezierSegments && bezierSegments.length > 0) {
+                            for (const segment of bezierSegments) {
+                              if (targetY >= segment.startY && targetY <= segment.endY) {
+                                const pointOnCurve = findPointOnBezierAtY(
+                                  segment.p0,
+                                  segment.cp1,
+                                  segment.cp2,
+                                  segment.p3,
+                                  targetY
+                                );
+                                if (pointOnCurve) {
+                                  minX = Math.min(minX, pointOnCurve.x);
+                                  maxX = Math.max(maxX, pointOnCurve.x);
+                                }
+                                break;
+                              }
+                            }
+                          }
+                        });
+
+                        // If we found valid X positions, use them; otherwise use full width
+                        const hoverLineX1 = minX < maxX ? minX : timelineData.chartDimensions.padding.left;
+                        const hoverLineX2 =
+                          minX < maxX
+                            ? maxX
+                            : timelineData.chartDimensions.padding.left + timelineData.chartDimensions.plotWidth;
+
+                        return (
+                          <line
+                            x1={hoverLineX1}
+                            y1={targetY}
+                            x2={hoverLineX2}
+                            y2={targetY}
+                            stroke='var(--text-primary)'
+                            strokeWidth='0.5'
+                            opacity='0.3'
+                            style={{ pointerEvents: "none" }}
+                          />
+                        );
+                      })()}
+                      {hoverState.sensors.map((sensor) => {
+                        if (!timelineData.timeStart || !timelineData.timeRange) return null;
+
+                        // Find the line for this sensor
+                        const line = timelineData.sensorLines.find((l) => l.sensorId === sensor.sensorId);
+                        if (!line) return null;
+
+                        // Calculate target Y position based on timestamp
+                        const targetY =
+                          timelineData.chartDimensions.padding.top +
+                          (1 - (hoverState.timestamp.getTime() - timelineData.timeStart) / timelineData.timeRange) *
+                            timelineData.chartDimensions.plotHeight;
+
+                        // Get bezier segments for this line
+                        const bezierSegments = (line as any)._bezierSegments as Array<{
+                          p0: { x: number; y: number };
+                          cp1: { x: number; y: number };
+                          cp2: { x: number; y: number };
+                          p3: { x: number; y: number };
+                          startY: number;
+                          endY: number;
+                        }>;
+
+                        let pointOnCurve: { x: number; y: number } | null = null;
+
+                        if (bezierSegments && bezierSegments.length > 0) {
+                          // Find which segment contains the target Y
+                          for (const segment of bezierSegments) {
+                            if (targetY >= segment.startY && targetY <= segment.endY) {
+                              // Found the segment, find point on curve at this Y
+                              pointOnCurve = findPointOnBezierAtY(
+                                segment.p0,
+                                segment.cp1,
+                                segment.cp2,
+                                segment.p3,
+                                targetY
+                              );
+                              if (pointOnCurve) break;
+                            }
+                          }
+                        }
+
+                        // Fallback to original calculation if curve evaluation failed
+                        if (!pointOnCurve) {
+                          const x =
+                            timelineData.chartDimensions.padding.left +
+                            (timelineData.chartDimensions.plotWidth * sensor.normalizedValue) / 100;
+                          pointOnCurve = { x, y: targetY };
+                        }
+
+                        return (
+                          <circle
+                            key={sensor.sensorId}
+                            cx={pointOnCurve.x}
+                            cy={pointOnCurve.y}
+                            r='4'
+                            fill={sensor.config.color}
+                            stroke='var(--background-color)'
+                            strokeWidth='1'
+                            style={{ pointerEvents: "none" }}
+                          />
+                        );
+                      })}
+                    </>
+                  )}
+              </g>
+              {/* End clip group */}
+            </svg>
+
+            {/* Tooltip */}
+            {hoverState && (
+              <div
+                className={styles.tooltip}
+                style={{
+                  position: "fixed",
+                  left: hoverState.x + 10,
+                  top: hoverState.y - 10,
+                  pointerEvents: "none",
+                  zIndex: 1000,
+                }}
+              >
+                <div className={styles.tooltipDate}>
+                  {hoverState.timestamp.toLocaleString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+                {hoverState.sensors.map((sensor) => (
+                  <div key={sensor.sensorId} className={styles.tooltipItem}>
+                    <div className={styles.tooltipLabel} style={{ color: sensor.config.color }}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: "6px",
+                          height: "6px",
+                          backgroundColor: sensor.config.color,
+                          marginRight: "6px",
+                        }}
+                      ></span>
+                      {sensor.config.name}
+                    </div>
+                    <div className={styles.tooltipValue}>
+                      {sensor.value.toFixed(2)} {sensor.config.unit}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
-        <svg
-          ref={svgRef}
-          width='100%'
-          height='100%'
-          style={{
-            minWidth: "400px",
-            minHeight: "300px",
-            border: "1px solid #ccc",
-            backgroundColor: "#f9f9f9",
-          }}
-        >
-          <g className='chart-group' />
-        </svg>
-
-        {tooltip && (
-          <div
-            className={styles.tooltip}
-            style={{
-              left: tooltip.x + 10,
-              top: tooltip.y - 10,
-              borderColor: tooltip.config.color,
-            }}
-          >
-            <div className={styles.tooltipTitle} style={{ color: tooltip.config.color }}>
-              {tooltip.config.name}
-            </div>
-            <div className={styles.tooltipValue}>
-              {tooltip.data.value.toFixed(2)} {tooltip.config.unit}
-            </div>
-            <div className={styles.tooltipTime}>{tooltip.data.timestamp.toLocaleString()}</div>
-          </div>
-        )}
-
-        {error && <div className={styles.error}>Error: {error}</div>}
-
-        {isInitialLoad && (
-          <div className={styles.loadingIndicator}>
-            <div className={styles.spinner}></div>
-            <span>Loading sensor data...</span>
-          </div>
-        )}
-
-        {isLoadingData && (
-          <div className={styles.loadingIndicator}>
-            <div className={styles.spinner}></div>
-            <span>Loading data for current view...</span>
-          </div>
-        )}
-
-        {isProcessingData && (
-          <div className={styles.loadingIndicator}>
-            <div className={styles.spinner}></div>
-            <span>Processing sensor data...</span>
-          </div>
-        )}
-      </div>
-
-      <div className={styles.legend}>
-        {SENSOR_CONFIGS.map((config) => (
-          <div
-            key={config.sensorId}
-            className={`${styles.legendItem} ${selectedSensor === config.sensorId ? styles.selected : ""}`}
-            onClick={() => setSelectedSensor(selectedSensor === config.sensorId ? null : config.sensorId)}
-          >
-            <div className={styles.legendColor} style={{ backgroundColor: config.color }} />
-            <span>{config.name}</span>
-          </div>
-        ))}
       </div>
     </div>
   );

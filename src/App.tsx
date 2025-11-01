@@ -1,77 +1,10 @@
 import { useState } from "react";
+import { Routes, Route, Link } from "react-router-dom";
 import Visualization from "./components/Visualization";
-// import { VerticalTimeline } from "./components/VerticalTimeline";
+import { VerticalTimeline } from "./components/VerticalTimeline";
 
-function App() {
+function HomePage() {
   const [isSensorsExpanded, setIsSensorsExpanded] = useState(false);
-
-  // const [currentPage, setCurrentPage] = useState<"home" | "timeline">("home");
-
-  // useEffect(() => {
-  //   // Handle hash-based routing
-  //   const handleHashChange = () => {
-  //     const hash = window.location.hash.slice(1);
-  //     if (hash === "timeline") {
-  //       setCurrentPage("timeline");
-  //     } else {
-  //       setCurrentPage("home");
-  //     }
-  //   };
-
-  //   // Set initial page based on hash
-  //   handleHashChange();
-
-  //   // Listen for hash changes
-  //   window.addEventListener("hashchange", handleHashChange);
-  //   return () => window.removeEventListener("hashchange", handleHashChange);
-  // }, []);
-
-  // const navigateTo = (page: "home" | "timeline") => {
-  //   setCurrentPage(page);
-  //   if (page === "timeline") {
-  //     window.location.hash = "timeline";
-  //   } else {
-  //     window.location.hash = "";
-  //   }
-  // };
-
-  // if (currentPage === "timeline") {
-  //   return (
-  //     <>
-  //       <header>
-  //         <div className='header-content'>
-  //           <h1>
-  //             <img src='/favicon.png' alt='icon' />
-  //             office---space
-  //           </h1>
-  //           <button onClick={() => navigateTo("home")} className='nav-button'>
-  //             ← Home
-  //           </button>
-  //         </div>
-  //       </header>
-
-  //       <section className='timeline'>
-  //         <VerticalTimeline />
-  //       </section>
-
-  //       <footer>
-  //         <p>View the code on GitHub</p>
-  //         <ul>
-  //           <li>
-  //             <a href='https://github.com/iammatthias/office-space' target='_blank' rel='noopener noreferrer'>
-  //               Frontend
-  //             </a>
-  //           </li>
-  //           <li>
-  //             <a href='https://github.com/iammatthias/office-space-db' target='_blank' rel='noopener noreferrer'>
-  //               Backend
-  //             </a>
-  //           </li>
-  //         </ul>
-  //       </footer>
-  //     </>
-  //   );
-  // }
 
   return (
     <>
@@ -81,9 +14,9 @@ function App() {
             <img src='/favicon.png' alt='icon' />
             office---space
           </h1>
-          {/* <button onClick={() => navigateTo("timeline")} className='nav-button'>
+          <Link to='/timeline' className='nav-button'>
             Timeline →
-          </button> */}
+          </Link>
         </div>
       </header>
 
@@ -183,6 +116,53 @@ function App() {
         </ul>
       </footer>
     </>
+  );
+}
+
+function TimelinePage() {
+  return (
+    <>
+      <header>
+        <div className='header-content'>
+          <h1>
+            <img src='/favicon.png' alt='icon' />
+            office---space
+          </h1>
+          <Link to='/' className='nav-button'>
+            ← Home
+          </Link>
+        </div>
+      </header>
+
+      <section className='timeline'>
+        <VerticalTimeline />
+      </section>
+
+      <footer>
+        <p>View the code on GitHub</p>
+        <ul>
+          <li>
+            <a href='https://github.com/iammatthias/office-space' target='_blank' rel='noopener noreferrer'>
+              Frontend
+            </a>
+          </li>
+          <li>
+            <a href='https://github.com/iammatthias/office-space-db' target='_blank' rel='noopener noreferrer'>
+              Backend
+            </a>
+          </li>
+        </ul>
+      </footer>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <Routes>
+      <Route path='/' element={<HomePage />} />
+      <Route path='/timeline' element={<TimelinePage />} />
+    </Routes>
   );
 }
 

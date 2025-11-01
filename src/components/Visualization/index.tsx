@@ -22,7 +22,7 @@ interface PreloadState {
 }
 
 export default function Visualization_v2({ sensor }: VisualizationProps) {
-  const [currentTimePeriod, setCurrentTimePeriod] = useState<TimePeriod>("daily");
+  const [currentTimePeriod, setCurrentTimePeriod] = useState<TimePeriod>("cumulative");
   const [preloadState, setPreloadState] = useState<PreloadState>({
     daily: { cid: null, isLoading: false, error: null, isPreloaded: false, imageElement: null, isImageLoaded: false },
     cumulative: {
@@ -268,8 +268,17 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
     );
   }
 
+  // Don't render image if CID is not available yet
+  if (!currentData.cid) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.loading}>Loading {currentTimePeriod} data...</div>
+      </div>
+    );
+  }
+
   // Use preloaded image if available, otherwise fall back to direct URL
-  const imageUrl = currentData.imageElement?.src || createImageUrl(currentData.cid!);
+  const imageUrl = currentData.imageElement?.src || createImageUrl(currentData.cid);
 
   return (
     <div className={styles.container}>
