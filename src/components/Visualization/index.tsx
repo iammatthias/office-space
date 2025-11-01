@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import styles from "./Visualization.module.css";
 
-type TimePeriod = "daily" | "hourly" | "cumulative";
+type TimePeriod = "daily" | "cumulative";
 
 interface VisualizationProps {
   sensor: "gas" | "humidity" | "light" | "pressure" | "temperature" | "uv";
@@ -18,7 +18,6 @@ interface ImageData {
 
 interface PreloadState {
   daily: ImageData;
-  hourly: ImageData;
   cumulative: ImageData;
 }
 
@@ -26,7 +25,6 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
   const [currentTimePeriod, setCurrentTimePeriod] = useState<TimePeriod>("daily");
   const [preloadState, setPreloadState] = useState<PreloadState>({
     daily: { cid: null, isLoading: false, error: null, isPreloaded: false, imageElement: null, isImageLoaded: false },
-    hourly: { cid: null, isLoading: false, error: null, isPreloaded: false, imageElement: null, isImageLoaded: false },
     cumulative: {
       cid: null,
       isLoading: false,
@@ -179,8 +177,8 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
       // Start with daily as priority
       await fetchImageData("daily", true);
 
-      // Preload hourly and cumulative in parallel with high priority
-      Promise.all([fetchImageData("hourly", false), fetchImageData("cumulative", false)]).catch(console.error);
+      // Preload cumulative in background
+      fetchImageData("cumulative", false).catch(console.error);
     };
 
     loadPriorityData();
@@ -208,7 +206,7 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
       <div className={styles.container}>
         <div className={styles.loading}>Loading {currentTimePeriod} data...</div>
         <div className={styles.toggleContainer}>
-          {(["daily", "hourly", "cumulative"] as TimePeriod[]).map((period) => {
+          {(["daily", "cumulative"] as TimePeriod[]).map((period) => {
             const periodData = preloadState[period];
             const buttonClasses = [
               styles.toggleButton,
@@ -243,7 +241,7 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
           Error loading {currentTimePeriod} data: {currentData.error.message}
         </div>
         <div className={styles.toggleContainer}>
-          {(["daily", "hourly", "cumulative"] as TimePeriod[]).map((period) => {
+          {(["daily", "cumulative"] as TimePeriod[]).map((period) => {
             const periodData = preloadState[period];
             const buttonClasses = [
               styles.toggleButton,
@@ -298,7 +296,7 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
         }}
       />
       <div className={styles.toggleContainer}>
-        {(["daily", "hourly", "cumulative"] as TimePeriod[]).map((period) => {
+        {(["daily", "cumulative"] as TimePeriod[]).map((period) => {
           const periodData = preloadState[period];
           const isDisabled = periodData.isLoading || !!periodData.error;
           const buttonClasses = [
