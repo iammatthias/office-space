@@ -414,7 +414,7 @@ section:has(svg) {
 }
 
 /* Timeline controls header */
-section:has(svg) > div:first-child {
+section:has(> header > nav) > header {
   position: sticky;
   top: calc(var(--space-lg) * 2 + var(--space-xl) * 2 + 1.25rem + 2px);
   z-index: 100;
@@ -422,18 +422,18 @@ section:has(svg) > div:first-child {
   border-bottom: 1px solid var(--color-border);
 }
 
-section:has(svg) > div:first-child > div:first-child {
+section:has(> header > nav) > header > div {
   padding: var(--space-md) var(--space-xl) var(--space-sm);
   border-bottom: 1px solid var(--color-border);
 }
 
-section:has(svg) > div:first-child > div:first-child > div {
+section:has(> header > nav) > header > div {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
 }
 
-section:has(svg) > div:first-child > div:first-child h3 {
+section:has(> header > nav) > header h1 {
   margin: 0;
   font-size: var(--type-scale-lg);
   font-weight: var(--font-weight-normal);
@@ -441,7 +441,7 @@ section:has(svg) > div:first-child > div:first-child h3 {
   letter-spacing: 0;
 }
 
-section:has(svg) > div:first-child > div:first-child > div > div {
+section:has(> header > nav) > header > div > div {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -449,19 +449,19 @@ section:has(svg) > div:first-child > div:first-child > div > div {
   color: var(--color-text-secondary);
 }
 
-section:has(svg) > div:first-child > div:first-child > div > div span:first-child {
+section:has(> header > nav) > header > div > div span:first-child {
   color: var(--color-text-secondary);
   font-weight: var(--font-weight-normal);
 }
 
-section:has(svg) > div:first-child > div:first-child > div > div span:last-child {
+section:has(> header > nav) > header > div > div span:last-child {
   color: var(--color-text);
   font-weight: var(--font-weight-normal);
   font-family: inherit;
 }
 
 /* Timeline controls body */
-section:has(svg) > div:first-child > div:last-child {
+section:has(> header > nav) > header > nav {
   padding: var(--space-sm) var(--space-xl);
   display: flex;
   gap: var(--space-2xl);
@@ -469,7 +469,7 @@ section:has(svg) > div:first-child > div:last-child {
   flex-wrap: wrap;
 }
 
-section:has(svg) > div:first-child > div:last-child > div {
+section:has(> header > nav) > header > nav > div {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -477,7 +477,7 @@ section:has(svg) > div:first-child > div:last-child > div {
   min-width: 0;
 }
 
-section:has(svg) > div:first-child > div:last-child > div > label {
+section:has(> header > nav) > header > nav > div > label {
   font-size: var(--type-scale-xs);
   font-weight: var(--font-weight-normal);
   color: var(--color-text-secondary);
@@ -486,13 +486,13 @@ section:has(svg) > div:first-child > div:last-child > div > label {
 }
 
 /* Date range buttons */
-section:has(svg) > div:first-child > div:last-child > div:first-child > div {
+section:has(> header > nav) > header > nav > div:first-child > div {
   display: flex;
   gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
-section:has(svg) > div:first-child > div:last-child > div:first-child button {
+section:has(> header > nav) > header > nav > div:first-child button {
   padding: var(--space-xs) var(--space-sm);
   background: transparent;
   border: none;
@@ -506,24 +506,24 @@ section:has(svg) > div:first-child > div:last-child > div:first-child button {
   font-family: inherit;
 }
 
-section:has(svg) > div:first-child > div:last-child > div:first-child button:hover {
+section:has(> header > nav) > header > nav > div:first-child button:hover {
   color: var(--color-text);
 }
 
-section:has(svg) > div:first-child > div:last-child > div:first-child button[aria-pressed="true"] {
+section:has(> header > nav) > header > nav > div:first-child button[aria-pressed="true"] {
   color: var(--color-text);
   border-bottom-color: var(--color-text);
   background: light-dark(rgba(49, 113, 178, 0.06), rgba(67, 133, 190, 0.06));
 }
 
 /* Sensor legend buttons */
-section:has(svg) > div:first-child > div:last-child > div:last-child > div {
+section:has(> header > nav) > header > nav > div:last-child > div {
   display: flex;
   gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
-section:has(svg) > div:first-child > div:last-child > div:last-child button {
+section:has(> header > nav) > header > nav > div:last-child button {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
@@ -539,20 +539,20 @@ section:has(svg) > div:first-child > div:last-child > div:last-child button {
   font-family: inherit;
 }
 
-section:has(svg) > div:first-child > div:last-child > div:last-child button:hover {
+section:has(> header > nav) > header > nav > div:last-child button:hover {
   color: var(--color-text);
 }
 
-section:has(svg) > div:first-child > div:last-child > div:last-child button[aria-pressed="true"] {
+section:has(> header > nav) > header > nav > div:last-child button[aria-pressed="true"] {
   color: var(--color-text);
   background: light-dark(rgba(49, 113, 178, 0.05), rgba(67, 133, 190, 0.05));
 }
 
-section:has(svg) > div:first-child > div:last-child > div:last-child button[aria-pressed="false"] {
+section:has(> header > nav) > header > nav > div:last-child button[aria-pressed="false"] {
   opacity: 0.4;
 }
 
-section:has(svg) > div:first-child > div:last-child > div:last-child button span {
+section:has(> header > nav) > header > nav > div:last-child button > div {
   width: 8px;
   height: 8px;
   border-radius: 0;
@@ -561,7 +561,7 @@ section:has(svg) > div:first-child > div:last-child > div:last-child button span
 }
 
 /* Chart content */
-section:has(svg) > div:last-child {
+section:has(> header > nav) > div:last-child {
   width: 100%;
   max-width: 100%;
   padding: 0;
@@ -572,7 +572,7 @@ section:has(svg) > div:last-child {
   overflow-x: hidden;
 }
 
-section:has(svg) > div:last-child > div {
+section:has(> header > nav) > div:last-child > div {
   display: flex;
   justify-content: flex-start;
   align-items: flex-start;
@@ -582,7 +582,7 @@ section:has(svg) > div:last-child > div {
   background: var(--color-background);
 }
 
-section:has(svg) svg {
+section:has(> header > nav) svg {
   display: block;
   flex-shrink: 0;
   max-width: 100%;
@@ -592,7 +592,7 @@ section:has(svg) svg {
 }
 
 /* Tooltip */
-section:has(svg) [role="tooltip"] {
+section:has(> header > nav) [role="tooltip"] {
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: 2px;
@@ -602,7 +602,7 @@ section:has(svg) [role="tooltip"] {
   font-size: var(--type-scale-sm);
 }
 
-section:has(svg) [role="tooltip"] > div:first-child {
+section:has(> header > nav) [role="tooltip"] > div:first-child {
   font-weight: var(--font-weight-normal);
   color: var(--color-text);
   margin-bottom: var(--space-sm);
@@ -611,7 +611,7 @@ section:has(svg) [role="tooltip"] > div:first-child {
   font-family: inherit;
 }
 
-section:has(svg) [role="tooltip"] > div:not(:first-child) {
+section:has(> header > nav) [role="tooltip"] > div:not(:first-child) {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -619,7 +619,7 @@ section:has(svg) [role="tooltip"] > div:not(:first-child) {
   gap: var(--space-md);
 }
 
-section:has(svg) [role="tooltip"] > div > span:first-child {
+section:has(> header > nav) [role="tooltip"] > div > span:first-child {
   font-weight: var(--font-weight-normal);
   color: var(--color-text-secondary);
   display: flex;
@@ -627,7 +627,7 @@ section:has(svg) [role="tooltip"] > div > span:first-child {
   gap: var(--space-xs);
 }
 
-section:has(svg) [role="tooltip"] > div > span:last-child {
+section:has(> header > nav) [role="tooltip"] > div > span:last-child {
   font-weight: var(--font-weight-normal);
   color: var(--color-text);
   font-family: inherit;
@@ -686,17 +686,17 @@ section:has(svg) > div:only-child {
   }
 
   /* Timeline controls */
-  section:has(svg) > div:first-child > div:first-child {
+  section:has(> header > nav) > header > div {
     padding: var(--space-sm) var(--space-md) var(--space-xs);
   }
 
-  section:has(svg) > div:first-child > div:last-child {
+  section:has(> header > nav) > header > nav {
     padding: var(--space-xs) var(--space-md);
     gap: var(--space-xl);
     flex-direction: column;
   }
 
-  section:has(svg) > div:first-child > div:last-child > div {
+  section:has(> header > nav) > header > nav > div {
     width: 100%;
   }
 }

@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { supabase } from "../../lib/supabase";
+import { loadDayNight, loadHourly } from "../../lib/archive";
 
 interface DataPoint {
   timestamp: Date;
@@ -238,51 +238,17 @@ export const VerticalTimeline = () => {
       startTime: Date | undefined,
       endTime: Date | undefined,
       page: number,
-      pageSize: number = 1000,
-      useRecentView: boolean = false
+      pageSize: number = 1000
     ) => {
-      try {
-        // Use recent view for initial loads (fast, last 90 days), full view for "All" or date-filtered queries
-        const viewName = useRecentView ? "daily_daynight_data_recent" : "daily_daynight_data";
+      const start = startTime?.toISOString().split("T")[0];
+      const end = endTime?.toISOString().split("T")[0];
+      const rows = (await loadDayNight())
+        .filter((row) => (!start || row.date >= start) && (!end || row.date <= end))
+        .sort((a, b) => b.date.localeCompare(a.date) || b.period.localeCompare(a.period));
 
-        // Build query for this specific page
-        let pageQuery = supabase.from(viewName).select("*", { count: "exact" });
-
-        // Always exclude current day (today) - show data up to yesterday
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-        pageQuery = pageQuery.lte("date", yesterday.toISOString().split("T")[0]);
-
-        // Apply additional date filters if provided
-        if (startTime) {
-          pageQuery = pageQuery.gte("date", startTime.toISOString().split("T")[0]);
-        }
-        if (endTime) {
-          // Use the smaller of endTime or yesterday
-          const endDate = endTime < yesterday ? endTime : yesterday;
-          pageQuery = pageQuery.lte("date", endDate.toISOString().split("T")[0]);
-        }
-
-        // Order by date descending, then period descending (day before night) to get most recent first
-        pageQuery = pageQuery.order("date", { ascending: false }).order("period", { ascending: false });
-
-        const offset = page * pageSize;
-        const { data: rawData, error: queryError, count } = await pageQuery.range(offset, offset + pageSize - 1);
-
-        if (queryError) {
-          throw queryError;
-        }
-
-        return {
-          data: rawData || [],
-          totalCount: count || 0,
-          hasMore: rawData ? rawData.length === pageSize : false,
-        };
-      } catch (err) {
-        throw err;
-      }
+      const offset = page * pageSize;
+      const data = rows.slice(offset, offset + pageSize);
+      return { data, totalCount: rows.length, hasMore: offset + pageSize < rows.length };
     },
     []
   );
@@ -312,16 +278,10 @@ export const VerticalTimeline = () => {
         endTime = dayStart;
       }
 
-      const { data: rawData, error: queryError } = await supabase
-        .from("hourly_data")
-        .select("*")
-        .gte("time", startTime.toISOString())
-        .lte("time", endTime.toISOString())
-        .order("time", { ascending: true });
-
-      if (queryError) {
-        return [];
-      }
+      const rawData = (await loadHourly()).filter((row) => {
+        const t = new Date(row.time).getTime();
+        return t >= startTime.getTime() && t <= endTime.getTime();
+      });
 
       if (!rawData || rawData.length === 0) {
         return [];
@@ -445,7 +405,7 @@ export const VerticalTimeline = () => {
         // Daily data has 2 rows per day (day + night), so we can use larger page size
         // Use recent view for initial load (fast, optimized for last 90 days)
         const pageSize = 2000; // ~1000 days worth of data
-        const result = await fetchDataPage(undefined, undefined, 0, pageSize, true); // Use recent view for initial load
+        const result = await fetchDataPage(undefined, undefined, 0, pageSize);
 
         if (result.data && result.data.length > 0) {
           const processedData = processRawData(result.data);
@@ -497,7 +457,7 @@ export const VerticalTimeline = () => {
             // The recent view only has ~90 days, so we likely won't have multiple pages
             // If we do, load them but still use recent view
             if (pages > 1) {
-              loadRemainingPages(pages, pageSize, true); // Keep using recent view
+              loadRemainingPages(pages, pageSize);
             }
           }
         } else {
@@ -517,12 +477,12 @@ export const VerticalTimeline = () => {
 
   // Load remaining pages in the background
   const loadRemainingPages = useCallback(
-    async (totalPages: number, pageSize: number, useRecentView: boolean = false) => {
+    async (totalPages: number, pageSize: number) => {
       setIsLoadingMore(true);
 
       try {
         for (let page = 1; page < totalPages; page++) {
-          const result = await fetchDataPage(undefined, undefined, page, pageSize, useRecentView);
+          const result = await fetchDataPage(undefined, undefined, page, pageSize);
 
           if (result.data && result.data.length > 0) {
             const newProcessedData = processRawData(result.data);
@@ -577,11 +537,6 @@ export const VerticalTimeline = () => {
               });
             }
           }
-
-          // Small delay to avoid overwhelming the database
-          // Longer delay when using full view to avoid timeouts
-          const delay = useRecentView ? 100 : 200;
-          await new Promise((resolve) => setTimeout(resolve, delay));
         }
       } catch (err) {
         // Silent error handling - pages load in background
@@ -1133,7 +1088,7 @@ export const VerticalTimeline = () => {
       const pageSize = 1000; // Smaller page size for full view to avoid timeouts
 
       // Start with first page of full view
-      const result = await fetchDataPage(undefined, undefined, 0, pageSize, false); // Use full view
+      const result = await fetchDataPage(undefined, undefined, 0, pageSize);
 
       if (result.data && result.data.length > 0) {
         const processedData = processRawData(result.data);
@@ -1164,7 +1119,7 @@ export const VerticalTimeline = () => {
 
         // Load remaining pages in background
         if (pages > 1) {
-          loadRemainingPages(pages, pageSize, false); // Use full view
+          loadRemainingPages(pages, pageSize);
         }
       }
     } catch (err) {
