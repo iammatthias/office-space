@@ -1,724 +1,310 @@
-/* ==========================================================================
-   Tufte-Inspired Classless CSS with Flexoki Colors
-   ========================================================================== */
-
-/* Flexoki Color Palette
-   https://github.com/kepano/flexoki */
 :root {
+  /* Enable light-dark mode switching */
   color-scheme: light dark;
 
-  /* Base colors */
-  --flexoki-black: light-dark(#100f0f, #100f0f);
-  --flexoki-paper: light-dark(#fffcf0, #1c1b1a);
-  --flexoki-white: light-dark(#fffcf0, #cecdc3);
+  /* Typography */
+  --font-size-xs: 0.75rem; /* 12px */
+  --font-size-sm: 0.875rem; /* 14px */
+  --font-size-base: 1rem; /* 16px */
+  --font-size-lg: 1.125rem; /* 18px */
+  --font-size-xl: 1.25rem; /* 20px */
 
-  /* Text colors */
-  --flexoki-tx-1: light-dark(#100f0f, #cecdc3);
-  --flexoki-tx-2: light-dark(#6f6e69, #b7b5ac);
-  --flexoki-tx-3: light-dark(#878580, #878580);
-
-  /* UI colors */
-  --flexoki-ui-1: light-dark(#f2f0e5, #282726);
-  --flexoki-ui-2: light-dark(#e6e4d9, #343331);
-  --flexoki-ui-3: light-dark(#dad8ce, #403e3c);
-  --flexoki-ui-4: light-dark(#cecdc3, #575653);
-
-  /* Accent colors - 500 shades */
-  --flexoki-red: light-dark(#af3029, #d14d41);
-  --flexoki-orange: light-dark(#bc5215, #da702c);
-  --flexoki-yellow: light-dark(#ad8301, #d0a215);
-  --flexoki-green: light-dark(#66800b, #879a39);
-  --flexoki-cyan: light-dark(#24837b, #3aa99f);
-  --flexoki-blue: light-dark(#205ea6, #4385be);
-  --flexoki-purple: light-dark(#5e409d, #8b7ec8);
-  --flexoki-magenta: light-dark(#a02f6f, #ce5d97);
-
-  /* Semantic color mapping */
-  --color-background: var(--flexoki-paper);
-  --color-surface: var(--flexoki-ui-1);
-  --color-text: var(--flexoki-tx-1);
-  --color-text-secondary: var(--flexoki-tx-2);
-  --color-text-tertiary: var(--flexoki-tx-3);
-  --color-border: var(--flexoki-ui-3);
-  --color-hover: var(--flexoki-ui-2);
-  --color-accent: var(--flexoki-blue);
-
-  /* Typography scale */
-  --type-scale-xs: 0.75rem;    /* 12px */
-  --type-scale-sm: 0.8125rem;  /* 13px */
-  --type-scale-base: 1rem;     /* 16px */
-  --type-scale-md: 1.125rem;   /* 18px */
-  --type-scale-lg: 1.25rem;    /* 20px */
-  --type-scale-xl: 1.5rem;     /* 24px */
-  --type-scale-2xl: 2rem;      /* 32px */
-
-  /* Font weights */
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
 
-  /* Line heights - Tufte prefers generous spacing for body, tight for headings */
-  --line-height-tight: 1.2;
-  --line-height-base: 1.6;
-  --line-height-relaxed: 1.8;
+  font-family: monospace;
+  line-height: 1.6;
+  font-weight: var(--font-weight-normal);
 
-  /* Spacing system - based on typography */
-  --space-xs: 0.25rem;  /* 4px */
-  --space-sm: 0.5rem;   /* 8px */
-  --space-md: 1rem;     /* 16px */
-  --space-lg: 1.5rem;   /* 24px */
-  --space-xl: 2rem;     /* 32px */
-  --space-2xl: 3rem;    /* 48px */
-  --space-3xl: 4rem;    /* 64px */
+  /* Base colors using light-dark() - improved contrast */
+  --background-color: light-dark(#ffffff, #121416);
+  --background-translucent: light-dark(rgba(255, 255, 255, 0.98), rgba(18, 20, 22, 0.98));
+  --text-color: light-dark(#121416, #ffffff);
+  --text-secondary: light-dark(#374151, #d1d5db);
+  --text-tertiary: light-dark(#4b5563, #9ca3af);
 
-  /* Content width */
-  --content-width: 80ch;
-}
+  /* UI colors - enhanced contrast */
+  --primary-color: light-dark(#1971c2, #4dabf7);
+  --error-color: light-dark(#e03131, #ff8787);
+  --border-color: light-dark(#dee2e6, #343a40);
+  --hover-background: light-dark(#f1f3f5, #343a40);
 
-/* ==========================================================================
-   Base Styles
-   ========================================================================== */
+  /* Interactive states - aligned with background */
+  --hover-emphasis: light-dark(rgba(241, 243, 245, 0.6), rgba(52, 58, 64, 0.6));
+  --active-emphasis: light-dark(rgba(241, 243, 245, 0.8), rgba(52, 58, 64, 0.8));
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+  /* Component specific */
+  --shadow-color: light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.3));
+  --shadow-color-darker: light-dark(rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.5));
+  --overlay-background: light-dark(rgba(255, 255, 255, 0.95), rgba(18, 20, 22, 0.95));
+  --spinner-background: light-dark(#e9ecef, #343a40);
+  --spinner-foreground: var(--primary-color);
 
-html {
-  font-size: 100%;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, 'DejaVu Sans Mono', monospace;
-  font-size: var(--type-scale-base);
-  font-weight: var(--font-weight-normal);
-  line-height: var(--line-height-base);
-  color: var(--color-text);
-  background-color: var(--color-background);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-#root {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  width: 100%;
-}
-
-/* ==========================================================================
-   Typography - Tufte Principles
-   ========================================================================== */
-
-/* Headings use tighter line-height for clarity */
-h1, h2, h3, h4, h5, h6 {
-  font-weight: var(--font-weight-normal);
-  line-height: var(--line-height-tight);
-  color: var(--color-text);
+* {
   margin: 0;
+  padding: 0;
 }
 
-h1 {
-  font-size: var(--type-scale-lg);
-  letter-spacing: 0;
+body {
+  padding: 1rem;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-size: var(--font-size-base);
+}
+
+body > #root {
   display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-}
-
-h1 img {
-  width: 1.25rem;
-  height: 1.25rem;
-  display: block;
-}
-
-h2 {
-  font-size: var(--type-scale-md);
-  margin-bottom: var(--space-md);
-}
-
-/* Body text uses generous line-height for readability */
-p {
-  margin: 0 0 var(--space-md) 0;
-  max-width: var(--content-width);
-}
-
-p:last-child {
-  margin-bottom: 0;
-}
-
-/* Links are understated */
-a {
-  color: var(--color-accent);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.15s ease;
-}
-
-a:hover {
-  border-bottom-color: var(--color-accent);
-}
-
-a:focus {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-  border-radius: 2px;
-}
-
-/* Lists are minimal */
-ul {
-  list-style: none;
-}
-
-/* ==========================================================================
-   Layout
-   ========================================================================== */
-
-header {
-  border-bottom: 1px solid var(--color-border);
-  padding: var(--space-lg) var(--space-xl);
-  background: var(--color-background);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-header > div {
-  max-width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-header nav a {
-  font-size: var(--type-scale-sm);
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--color-border);
-  border-radius: 2px;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-header nav a:hover {
-  background-color: var(--color-hover);
-  border-color: var(--color-text-secondary);
-  border-bottom-color: var(--color-text-secondary);
-}
-
-footer {
-  margin-top: auto;
-  padding: var(--space-2xl) var(--space-xl);
-  border-top: 1px solid var(--color-border);
-  background: var(--color-background);
-}
-
-footer p {
-  font-size: var(--type-scale-sm);
-  color: var(--color-text-secondary);
-  margin-bottom: var(--space-md);
-}
-
-footer ul {
-  display: flex;
-  gap: var(--space-lg);
-}
-
-footer a {
-  font-size: var(--type-scale-sm);
-  color: var(--color-text-secondary);
-}
-
-footer a:hover {
-  color: var(--color-text);
-}
-
-/* Main content sections */
-section {
-  padding: var(--space-2xl) var(--space-xl);
-  max-width: 100%;
-}
-
-/* ==========================================================================
-   Home Page Sections
-   ========================================================================== */
-
-/* Introduction section */
-section:has(p:first-child) {
-  max-width: var(--content-width);
+  flex-direction: column;
+  gap: 2rem;
+  position: relative;
+  width: 100%;
+  min-height: 101vh;
+  height: 100%;
   margin: 0 auto;
 }
 
-/* Sensors section */
-section:has(h2) {
-  background: var(--color-surface);
+#root > *:not(.grid):not(.visualizations):not(.sensors):not(.timeline) {
+  max-width: 80ch;
 }
 
-section:has(h2) h2 {
-  color: var(--color-text);
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
-/* Toggle button for sensors (mobile) */
-button[aria-expanded] {
-  display: none;
-  width: 100%;
-  padding: var(--space-sm) var(--space-md);
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: 2px;
-  font-size: var(--type-scale-sm);
+.intro p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.sensors {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sensors h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin: 0;
+  color: var(--text-color);
+}
+
+.sensors-toggle {
+  background: none;
+  border: 1px solid var(--border-color);
+  padding: 0.5rem 1rem;
   font-family: inherit;
-  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
   cursor: pointer;
-  margin-bottom: var(--space-md);
-  text-align: left;
-  transition: background-color 0.15s ease;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--background-color);
+  align-self: flex-start;
 }
 
-button[aria-expanded]:hover {
-  background-color: var(--color-hover);
+.sensors-toggle:hover {
+  background-color: var(--hover-background);
+  color: var(--text-color);
+  border-color: var(--text-secondary);
 }
 
-button[aria-expanded] span {
-  float: right;
-  font-weight: var(--font-weight-medium);
+.sensors-toggle:active {
+  background-color: var(--active-emphasis);
 }
 
-/* Sensor grid */
-section:has(h2) > div {
+.sensors-toggle:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.toggle-icon {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
+.sensor-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--space-md);
-  max-height: none;
+  gap: 1rem;
+  transition: all 0.3s ease;
   overflow: hidden;
-  transition: max-height 0.3s ease;
 }
 
-section:has(h2) > div > div {
-  padding: var(--space-md);
-  border: 1px solid var(--color-border);
-  border-radius: 2px;
-  background: var(--color-background);
-}
-
-section:has(h2) > div > div span:first-child {
-  display: block;
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
-  margin-bottom: var(--space-xs);
-}
-
-section:has(h2) > div > div span:last-child {
-  display: block;
-  font-size: var(--type-scale-sm);
-  color: var(--color-text-secondary);
-}
-
-/* Visualizations grid */
-main {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-lg);
-  max-width: 100%;
-}
-
+/* Mobile-first collapsible behavior */
 @media (max-width: 768px) {
-  main {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 480px) {
-  main {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ==========================================================================
-   Visualization Component
-   ========================================================================== */
-
-figure {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  margin: 0;
-}
-
-figure img {
-  width: 100%;
-  height: auto;
-  display: block;
-  border: 1px solid var(--color-border);
-  border-radius: 2px;
-  background: var(--color-background);
-}
-
-figure nav {
-  display: flex;
-  gap: var(--space-xs);
-}
-
-figure button {
-  flex: 1;
-  padding: var(--space-xs) var(--space-sm);
-  background: transparent;
-  border: none;
-  border-bottom: 1.5px solid transparent;
-  border-radius: 0;
-  font-size: var(--type-scale-sm);
-  font-family: inherit;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-
-figure button:hover {
-  color: var(--color-text);
-}
-
-figure button[aria-pressed="true"] {
-  color: var(--color-text);
-  border-bottom-color: var(--color-accent);
-}
-
-figure button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* Loading state */
-figure:has(div:only-child) {
-  min-height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-figure div {
-  font-size: var(--type-scale-sm);
-  color: var(--color-text-secondary);
-  text-align: center;
-}
-
-/* ==========================================================================
-   Timeline Component
-   ========================================================================== */
-
-/* Timeline section */
-section:has(svg) {
-  padding: 0;
-  background: var(--color-background);
-}
-
-/* Timeline controls header */
-section:has(> header > nav) > header {
-  position: sticky;
-  top: calc(var(--space-lg) * 2 + var(--space-xl) * 2 + 1.25rem + 2px);
-  z-index: 100;
-  background: var(--color-background);
-  border-bottom: 1px solid var(--color-border);
-}
-
-section:has(> header > nav) > header > div {
-  padding: var(--space-md) var(--space-xl) var(--space-sm);
-  border-bottom: 1px solid var(--color-border);
-}
-
-section:has(> header > nav) > header > div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-}
-
-section:has(> header > nav) > header h1 {
-  margin: 0;
-  font-size: var(--type-scale-lg);
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text);
-  letter-spacing: 0;
-}
-
-section:has(> header > nav) > header > div > div {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  font-size: var(--type-scale-sm);
-  color: var(--color-text-secondary);
-}
-
-section:has(> header > nav) > header > div > div span:first-child {
-  color: var(--color-text-secondary);
-  font-weight: var(--font-weight-normal);
-}
-
-section:has(> header > nav) > header > div > div span:last-child {
-  color: var(--color-text);
-  font-weight: var(--font-weight-normal);
-  font-family: inherit;
-}
-
-/* Timeline controls body */
-section:has(> header > nav) > header > nav {
-  padding: var(--space-sm) var(--space-xl);
-  display: flex;
-  gap: var(--space-2xl);
-  align-items: flex-start;
-  flex-wrap: wrap;
-}
-
-section:has(> header > nav) > header > nav > div {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  flex: 1;
-  min-width: 0;
-}
-
-section:has(> header > nav) > header > nav > div > label {
-  font-size: var(--type-scale-xs);
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text-secondary);
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-/* Date range buttons */
-section:has(> header > nav) > header > nav > div:first-child > div {
-  display: flex;
-  gap: var(--space-xs);
-  flex-wrap: wrap;
-}
-
-section:has(> header > nav) > header > nav > div:first-child button {
-  padding: var(--space-xs) var(--space-sm);
-  background: transparent;
-  border: none;
-  border-bottom: 1.5px solid transparent;
-  border-radius: 0;
-  font-size: var(--type-scale-sm);
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: color 0.15s ease;
-  font-family: inherit;
-}
-
-section:has(> header > nav) > header > nav > div:first-child button:hover {
-  color: var(--color-text);
-}
-
-section:has(> header > nav) > header > nav > div:first-child button[aria-pressed="true"] {
-  color: var(--color-text);
-  border-bottom-color: var(--color-text);
-  background: light-dark(rgba(49, 113, 178, 0.06), rgba(67, 133, 190, 0.06));
-}
-
-/* Sensor legend buttons */
-section:has(> header > nav) > header > nav > div:last-child > div {
-  display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-section:has(> header > nav) > header > nav > div:last-child button {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  font-size: var(--type-scale-sm);
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  transition: color 0.15s ease;
-  font-family: inherit;
-}
-
-section:has(> header > nav) > header > nav > div:last-child button:hover {
-  color: var(--color-text);
-}
-
-section:has(> header > nav) > header > nav > div:last-child button[aria-pressed="true"] {
-  color: var(--color-text);
-  background: light-dark(rgba(49, 113, 178, 0.05), rgba(67, 133, 190, 0.05));
-}
-
-section:has(> header > nav) > header > nav > div:last-child button[aria-pressed="false"] {
-  opacity: 0.4;
-}
-
-section:has(> header > nav) > header > nav > div:last-child button > div {
-  width: 8px;
-  height: 8px;
-  border-radius: 0;
-  flex-shrink: 0;
-  transition: opacity 0.15s ease;
-}
-
-/* Chart content */
-section:has(> header > nav) > div:last-child {
-  width: 100%;
-  max-width: 100%;
-  padding: 0;
-  background: var(--color-background);
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  overflow-x: hidden;
-}
-
-section:has(> header > nav) > div:last-child > div {
-  display: flex;
-  justify-content: flex-start;
-  align-items: flex-start;
-  width: 100%;
-  max-width: 100%;
-  overflow-x: hidden;
-  background: var(--color-background);
-}
-
-section:has(> header > nav) svg {
-  display: block;
-  flex-shrink: 0;
-  max-width: 100%;
-  width: 100%;
-  height: auto;
-  overflow: visible;
-}
-
-/* Tooltip */
-section:has(> header > nav) [role="tooltip"] {
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: 2px;
-  padding: var(--space-sm) var(--space-md);
-  box-shadow: 0 1px 3px light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.3));
-  min-width: 180px;
-  font-size: var(--type-scale-sm);
-}
-
-section:has(> header > nav) [role="tooltip"] > div:first-child {
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text);
-  margin-bottom: var(--space-sm);
-  padding-bottom: var(--space-sm);
-  border-bottom: 1px solid var(--color-border);
-  font-family: inherit;
-}
-
-section:has(> header > nav) [role="tooltip"] > div:not(:first-child) {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-xs) 0;
-  gap: var(--space-md);
-}
-
-section:has(> header > nav) [role="tooltip"] > div > span:first-child {
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-}
-
-section:has(> header > nav) [role="tooltip"] > div > span:last-child {
-  font-weight: var(--font-weight-normal);
-  color: var(--color-text);
-  font-family: inherit;
-}
-
-/* Loading and error states */
-section:has(svg) > div:only-child {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-2xl);
-  font-size: var(--type-scale-sm);
-  color: var(--color-text-secondary);
-  min-height: 50vh;
-}
-
-/* ==========================================================================
-   Responsive Adjustments
-   ========================================================================== */
-
-@media (max-width: 768px) {
-  header {
-    padding: var(--space-md) var(--space-md);
-  }
-
-  h1 {
-    font-size: var(--type-scale-md);
-  }
-
-  section {
-    padding: var(--space-xl) var(--space-md);
-  }
-
-  footer {
-    padding: var(--space-xl) var(--space-md);
-  }
-
-  footer ul {
-    flex-direction: column;
-    gap: var(--space-sm);
-  }
-
-  /* Show sensors toggle button on mobile */
-  button[aria-expanded] {
-    display: block;
-  }
-
-  /* Hide sensors by default on mobile */
-  section:has(h2) > div[aria-hidden="true"] {
+  .sensor-grid.collapsed {
     max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+
+  .sensor-grid.expanded {
+    max-height: 1000px;
+    opacity: 1;
+    margin-top: 1rem;
     margin-bottom: 0;
   }
-
-  section:has(h2) > div:not([aria-hidden="true"]) {
-    max-height: 1000px;
-  }
-
-  /* Timeline controls */
-  section:has(> header > nav) > header > div {
-    padding: var(--space-sm) var(--space-md) var(--space-xs);
-  }
-
-  section:has(> header > nav) > header > nav {
-    padding: var(--space-xs) var(--space-md);
-    gap: var(--space-xl);
-    flex-direction: column;
-  }
-
-  section:has(> header > nav) > header > nav > div {
-    width: 100%;
-  }
 }
 
-/* ==========================================================================
-   Print Styles - Tufte Principle: Excellent print output
-   ========================================================================== */
-
-@media print {
-  header,
-  footer,
-  button,
-  nav {
+/* Desktop: always show sensors */
+@media (min-width: 769px) {
+  .sensors-toggle {
     display: none;
   }
 
-  body {
-    background: white;
-    color: black;
+  .sensor-grid {
+    max-height: none !important;
+    opacity: 1 !important;
   }
+}
 
-  section {
-    page-break-inside: avoid;
+.sensor-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem;
+  background-color: var(--hover-background);
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.sensor-name {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-color);
+  font-size: var(--font-size-sm);
+}
+
+.sensor-desc {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.4;
+}
+
+.visualizations {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.visualizations h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  margin: 0;
+  color: var(--text-color);
+  max-width: 80ch;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: auto;
+  gap: 2rem;
+  width: 100%;
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
   }
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(1, 1fr);
+  }
+}
+
+.grid > * {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* Aspect ratio as width / height */
+}
+
+ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-left: 2rem;
+}
+
+footer {
+  font-size: var(--font-size-sm);
+  * {
+    color: var(--text-secondary);
+  }
+}
+
+h1 {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+  align-items: center;
+  img {
+    width: 26px;
+    height: 26px;
+    @media (prefers-color-scheme: dark) {
+      filter: invert(1);
+    }
+  }
+}
+
+header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+nav {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.nav-button {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 2px;
+}
+
+.nav-button:hover {
+  background-color: var(--hover-background);
+  color: var(--text-color);
+}
+
+.nav-button:active {
+  background-color: var(--active-emphasis);
+}
+
+.nav-button:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
 }

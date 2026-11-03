@@ -9,18 +9,18 @@ function HomePage() {
   return (
     <>
       <header>
-        <div>
+        <div className='header-content'>
           <h1>
             <img src='/favicon.png' alt='icon' />
             office---space
           </h1>
-          <nav>
-            <Link to='/timeline'>Timeline →</Link>
-          </nav>
+          <Link to='/timeline' className='nav-button'>
+            Timeline →
+          </Link>
         </div>
       </header>
 
-      <section>
+      <section className='intro'>
         <p>
           A{" "}
           <a
@@ -43,38 +43,50 @@ function HomePage() {
         </p>
       </section>
 
-      <section>
+      <section className='sensors'>
         <h2>Sensors</h2>
-        <button onClick={() => setIsSensorsExpanded(!isSensorsExpanded)} aria-expanded={isSensorsExpanded}>
+        <button
+          className='sensors-toggle'
+          onClick={() => setIsSensorsExpanded(!isSensorsExpanded)}
+          aria-expanded={isSensorsExpanded}
+          aria-controls='sensors-content'
+        >
           {isSensorsExpanded ? "Hide" : "Show"} sensors
-          <span aria-hidden='true'>{isSensorsExpanded ? "−" : "+"}</span>
+          <span className='toggle-icon' aria-hidden='true'>
+            {isSensorsExpanded ? "−" : "+"}
+          </span>
         </button>
-        <div aria-hidden={!isSensorsExpanded}>
-          <div>
-            <span>BME280</span>
-            <span>Temperature, Humidity, Pressure</span>
+        <div
+          id='sensors-content'
+          className={`sensor-grid ${isSensorsExpanded ? "expanded" : "collapsed"}`}
+          aria-hidden={!isSensorsExpanded}
+        >
+          <div className='sensor-item'>
+            <span className='sensor-name'>BME280</span>
+            <span className='sensor-desc'>Temperature, Humidity, Pressure</span>
           </div>
-          <div>
-            <span>TSL25911</span>
-            <span>Ambient Light (0-88,000 Lux)</span>
+          <div className='sensor-item'>
+            <span className='sensor-name'>TSL25911</span>
+            <span className='sensor-desc'>Ambient Light (0-88,000 Lux)</span>
           </div>
-          <div>
-            <span>LTR390</span>
-            <span>UV Light (280-430nm)</span>
+          <div className='sensor-item'>
+            <span className='sensor-name'>LTR390</span>
+            <span className='sensor-desc'>UV Light (280-430nm)</span>
           </div>
-          <div>
-            <span>SGP40</span>
-            <span>VOC Air Quality (0-1,000 ppm)</span>
+          <div className='sensor-item'>
+            <span className='sensor-name'>SGP40</span>
+            <span className='sensor-desc'>VOC Air Quality (0-1,000 ppm)</span>
           </div>
-          <div>
-            <span>ICM20948</span>
-            <span>9-DOF Motion Sensor</span>
+          <div className='sensor-item'>
+            <span className='sensor-name'>ICM20948</span>
+            <span className='sensor-desc'>9-DOF Motion Sensor</span>
           </div>
         </div>
       </section>
 
-      <section>
-        <main>
+      <section className='visualizations'>
+        {/* <h2>Current Readings</h2> */}
+        <main className='grid'>
           <Visualization sensor='temperature' />
           <Visualization sensor='light' />
           <Visualization sensor='humidity' />
@@ -107,18 +119,18 @@ function TimelinePage() {
   return (
     <>
       <header>
-        <div>
+        <div className='header-content'>
           <h1>
             <img src='/favicon.png' alt='icon' />
             office---space
           </h1>
-          <nav>
-            <Link to='/'>← Home</Link>
-          </nav>
+          <Link to='/' className='nav-button'>
+            ← Home
+          </Link>
         </div>
       </header>
 
-      <section>
+      <section className='timeline'>
         <VerticalTimeline />
       </section>
 

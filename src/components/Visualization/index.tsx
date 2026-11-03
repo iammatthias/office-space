@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import styles from "./Visualization.module.css";
 
 type TimePeriod = "daily" | "cumulative";
 
@@ -184,22 +185,30 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
       .filter((data) => data.error)
       .map((data) => data.error?.message)
       .join(", ");
-    return <div>Error loading data: {allErrors}</div>;
+    return <div className={styles.error}>Error loading data: {allErrors}</div>;
   }
 
   // Show loading for current period if it's still loading
   if (currentData.isLoading) {
     return (
-      <figure>
-        <div>Loading {currentTimePeriod} data...</div>
-        <nav>
+      <div className={styles.container}>
+        <div className={styles.loading}>Loading {currentTimePeriod} data...</div>
+        <div className={styles.toggleContainer}>
           {(["daily", "cumulative"] as TimePeriod[]).map((period) => {
             const periodData = preloadState[period];
+            const buttonClasses = [
+              styles.toggleButton,
+              currentTimePeriod === period ? styles.active : "",
+              periodData.isLoading ? styles.loading : "",
+              periodData.error ? styles.error : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
 
             return (
               <button
                 key={period}
-                aria-pressed={currentTimePeriod === period}
+                className={buttonClasses}
                 onClick={() => handleTimePeriodChange(period)}
                 disabled={periodData.isLoading}
               >
@@ -207,26 +216,34 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
               </button>
             );
           })}
-        </nav>
-      </figure>
+        </div>
+      </div>
     );
   }
 
   // Show error for current period if it failed
   if (currentData.error) {
     return (
-      <figure>
-        <div>
+      <div className={styles.container}>
+        <div className={styles.error}>
           Error loading {currentTimePeriod} data: {currentData.error.message}
         </div>
-        <nav>
+        <div className={styles.toggleContainer}>
           {(["daily", "cumulative"] as TimePeriod[]).map((period) => {
             const periodData = preloadState[period];
+            const buttonClasses = [
+              styles.toggleButton,
+              currentTimePeriod === period ? styles.active : "",
+              periodData.isLoading ? styles.loading : "",
+              periodData.error ? styles.error : "",
+            ]
+              .filter(Boolean)
+              .join(" ");
 
             return (
               <button
                 key={period}
-                aria-pressed={currentTimePeriod === period}
+                className={buttonClasses}
                 onClick={() => handleTimePeriodChange(period)}
                 disabled={!!periodData.error}
               >
@@ -234,16 +251,16 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
               </button>
             );
           })}
-        </nav>
-      </figure>
+        </div>
+      </div>
     );
   }
 
   if (!currentData.src) {
     return (
-      <figure>
-        <div>Loading {currentTimePeriod} data...</div>
-      </figure>
+      <div className={styles.container}>
+        <div className={styles.loading}>Loading {currentTimePeriod} data...</div>
+      </div>
     );
   }
 
@@ -251,10 +268,11 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
   const imageUrl = currentData.imageElement?.src || currentData.src;
 
   return (
-    <figure>
+    <div className={styles.container}>
       <img
         src={imageUrl}
         alt={`${sensor} ${currentTimePeriod} visualization`}
+        className={styles.image}
         loading={currentData.isImageLoaded ? "eager" : "lazy"}
         decoding='async'
         style={{
@@ -273,15 +291,23 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
           }
         }}
       />
-      <nav>
+      <div className={styles.toggleContainer}>
         {(["daily", "cumulative"] as TimePeriod[]).map((period) => {
           const periodData = preloadState[period];
           const isDisabled = periodData.isLoading || !!periodData.error;
+          const buttonClasses = [
+            styles.toggleButton,
+            currentTimePeriod === period ? styles.active : "",
+            periodData.isLoading ? styles.loading : "",
+            periodData.error ? styles.error : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
 
           return (
             <button
               key={period}
-              aria-pressed={currentTimePeriod === period}
+              className={buttonClasses}
               onClick={() => handleTimePeriodChange(period)}
               disabled={isDisabled}
               title={isDisabled ? `${period} data unavailable` : `Switch to ${period} view`}
@@ -292,7 +318,7 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
             </button>
           );
         })}
-      </nav>
-    </figure>
+      </div>
+    </div>
   );
 }

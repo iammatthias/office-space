@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { loadDayNight, loadHourly } from "../../lib/archive";
+import styles from "./VerticalTimeline.module.css";
 
 interface DataPoint {
   timestamp: Date;
@@ -1151,108 +1152,116 @@ export const VerticalTimeline = () => {
 
   if (isLoading) {
     return (
-      <section>
-        <div>Loading timeline data...</div>
-      </section>
+      <div className={styles.container}>
+        <div className={styles.loading}>Loading timeline data...</div>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <section>
-        <div>{error}</div>
-      </section>
+      <div className={styles.container}>
+        <div className={styles.error}>{error}</div>
+      </div>
     );
   }
 
   if (!timelineData.chartDimensions || timelineData.sensorLines.length === 0) {
     return (
-      <section>
-        <header>
-          <h1>Sensor Timeline</h1>
-        </header>
-        <div>
+      <div className={styles.container}>
+        <div className={styles.controls}>
+          <div className={styles.controlsSection}>
+            <h2 className={styles.title}>Sensor Timeline</h2>
+          </div>
+        </div>
+        <div className={styles.error}>
           {error || "No data available"}
           <div style={{ marginTop: "1rem", fontSize: "0.875rem", opacity: 0.8 }}>
             Check the browser console for detailed error messages.
           </div>
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section>
+    <div className={styles.container}>
       {/* Fixed controls at top */}
-      <header>
-        <div>
-          <h1>Environmental Timeline</h1>
-          {viewStartDate && viewEndDate && (
-            <div>
-              <span>
-                {viewStartDate.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })}{" "}
-                –{" "}
-                {viewEndDate.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })}
-              </span>
-              {isLoadingMore && totalPages && (
-                <span style={{ marginLeft: "0.75rem" }}>
-                  ({loadedPages}/{totalPages})
+      <div className={styles.controls}>
+        <div className={styles.controlsHeader}>
+          <div className={styles.headerLeft}>
+            <h1 className={styles.title}>Environmental Timeline</h1>
+            {viewStartDate && viewEndDate && (
+              <div className={styles.dateRange}>
+                <span className={styles.dateRangeText}>
+                  {viewStartDate.toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}{" "}
+                  –{" "}
+                  {viewEndDate.toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
                 </span>
-              )}
-            </div>
-          )}
+                {isLoadingMore && totalPages && (
+                  <span className={styles.dateRangeLabel} style={{ marginLeft: "0.75rem" }}>
+                    ({loadedPages}/{totalPages})
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        <nav>
-          <div>
-            <label>Time Range</label>
-            <div>
+        <div className={styles.controlsBody}>
+          <div className={styles.controlGroup}>
+            <label className={styles.controlLabel}>Time Range</label>
+            <div className={styles.dateButtons}>
               <button
                 onClick={() => setDateRange(7)}
-                aria-pressed={isDateRangeActive(7)}
+                className={`${styles.dateButton} ${isDateRangeActive(7) ? styles.dateButtonActive : ""}`}
               >
                 7d
               </button>
               <button
                 onClick={() => setDateRange(30)}
-                aria-pressed={isDateRangeActive(30)}
+                className={`${styles.dateButton} ${isDateRangeActive(30) ? styles.dateButtonActive : ""}`}
               >
                 30d
               </button>
               <button
                 onClick={() => setDateRange(90)}
-                aria-pressed={isDateRangeActive(90)}
+                className={`${styles.dateButton} ${isDateRangeActive(90) ? styles.dateButtonActive : ""}`}
               >
                 90d
               </button>
               <button
                 onClick={showAllTime}
-                aria-pressed={isAllTimeActive()}
+                className={`${styles.dateButton} ${isAllTimeActive() ? styles.dateButtonActive : ""}`}
               >
                 All
               </button>
             </div>
           </div>
 
-          <div>
-            <label>Sensors</label>
-            <div>
+          <div className={styles.controlGroup}>
+            <label className={styles.controlLabel}>Sensors</label>
+            <div className={styles.sensorLegend}>
               {SENSOR_CONFIGS.map((config) => {
                 const isActive = selectedSensors.has(config.sensorId);
                 return (
                   <button
                     key={config.sensorId}
                     onClick={() => toggleSensor(config.sensorId)}
+                    className={`${styles.sensorButton} ${
+                      isActive ? styles.sensorButtonActive : styles.sensorButtonInactive
+                    }`}
                     aria-pressed={isActive}
                     title={`${isActive ? "Hide" : "Show"} ${config.name}`}
                   >
                     <div
+                      className={styles.sensorColor}
                       style={{
                         backgroundColor: config.color,
                         opacity: isActive ? 1 : 0.3,
@@ -1264,17 +1273,18 @@ export const VerticalTimeline = () => {
               })}
             </div>
           </div>
-        </nav>
-      </header>
+        </div>
+      </div>
 
       {/* Chart content */}
-      <div>
+      <div className={styles.chartContent}>
         {timelineData.chartDimensions && (
-          <div>
+          <div className={styles.chartWrapper}>
             <svg
               ref={svgRef}
               width={timelineData.chartDimensions.width}
               height={timelineData.chartDimensions.height}
+              className={styles.chartSvg}
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
               viewBox={`0 0 ${timelineData.chartDimensions.width} ${timelineData.chartDimensions.height}`}
@@ -1879,7 +1889,8 @@ export const VerticalTimeline = () => {
 
             {/* Tooltip */}
             {hoverState && (
-              <aside
+              <div
+                className={styles.tooltip}
                 style={{
                   position: "fixed",
                   left: hoverState.x + 10,
@@ -1888,7 +1899,7 @@ export const VerticalTimeline = () => {
                   zIndex: 1000,
                 }}
               >
-                <div>
+                <div className={styles.tooltipDate}>
                   {hoverState.timestamp.toLocaleString("en-US", {
                     month: "short",
                     day: "numeric",
@@ -1897,8 +1908,8 @@ export const VerticalTimeline = () => {
                   })}
                 </div>
                 {hoverState.sensors.map((sensor) => (
-                  <div key={sensor.sensorId}>
-                    <div style={{ color: sensor.config.color }}>
+                  <div key={sensor.sensorId} className={styles.tooltipItem}>
+                    <div className={styles.tooltipLabel} style={{ color: sensor.config.color }}>
                       <span
                         style={{
                           display: "inline-block",
@@ -1910,16 +1921,16 @@ export const VerticalTimeline = () => {
                       ></span>
                       {sensor.config.name}
                     </div>
-                    <div>
+                    <div className={styles.tooltipValue}>
                       {sensor.value.toFixed(2)} {sensor.config.unit}
                     </div>
                   </div>
                 ))}
-              </aside>
+              </div>
             )}
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 };
