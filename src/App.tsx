@@ -9,18 +9,18 @@ function HomePage() {
   return (
     <>
       <header>
-        <div className='header-content'>
+        <div>
           <h1>
             <img src='/favicon.png' alt='icon' />
             office---space
           </h1>
-          <Link to='/timeline' className='nav-button'>
-            Timeline →
-          </Link>
+          <nav>
+            <Link to='/timeline'>Timeline →</Link>
+          </nav>
         </div>
       </header>
 
-      <section className='intro'>
+      <section>
         <p>
           A{" "}
           <a
@@ -38,59 +38,43 @@ function HomePage() {
         </p>
 
         <p>
-          Data updates every minute. Missing data points are rendered as the nearest values. Images are generated
-          locally and pinned on{" "}
-          <a href='https://pinata.cloud/' target='_blank' rel='noopener noreferrer'>
-            Pinata
-          </a>
-          .
+          An archive of 2025, recorded every minute. Missing data points are rendered as the nearest values. Images
+          are generated locally and served from Cloudflare R2.
         </p>
       </section>
 
-      <section className='sensors'>
+      <section>
         <h2>Sensors</h2>
-        <button
-          className='sensors-toggle'
-          onClick={() => setIsSensorsExpanded(!isSensorsExpanded)}
-          aria-expanded={isSensorsExpanded}
-          aria-controls='sensors-content'
-        >
+        <button onClick={() => setIsSensorsExpanded(!isSensorsExpanded)} aria-expanded={isSensorsExpanded}>
           {isSensorsExpanded ? "Hide" : "Show"} sensors
-          <span className='toggle-icon' aria-hidden='true'>
-            {isSensorsExpanded ? "−" : "+"}
-          </span>
+          <span aria-hidden='true'>{isSensorsExpanded ? "−" : "+"}</span>
         </button>
-        <div
-          id='sensors-content'
-          className={`sensor-grid ${isSensorsExpanded ? "expanded" : "collapsed"}`}
-          aria-hidden={!isSensorsExpanded}
-        >
-          <div className='sensor-item'>
-            <span className='sensor-name'>BME280</span>
-            <span className='sensor-desc'>Temperature, Humidity, Pressure</span>
+        <div aria-hidden={!isSensorsExpanded}>
+          <div>
+            <span>BME280</span>
+            <span>Temperature, Humidity, Pressure</span>
           </div>
-          <div className='sensor-item'>
-            <span className='sensor-name'>TSL25911</span>
-            <span className='sensor-desc'>Ambient Light (0-88,000 Lux)</span>
+          <div>
+            <span>TSL25911</span>
+            <span>Ambient Light (0-88,000 Lux)</span>
           </div>
-          <div className='sensor-item'>
-            <span className='sensor-name'>LTR390</span>
-            <span className='sensor-desc'>UV Light (280-430nm)</span>
+          <div>
+            <span>LTR390</span>
+            <span>UV Light (280-430nm)</span>
           </div>
-          <div className='sensor-item'>
-            <span className='sensor-name'>SGP40</span>
-            <span className='sensor-desc'>VOC Air Quality (0-1,000 ppm)</span>
+          <div>
+            <span>SGP40</span>
+            <span>VOC Air Quality (0-1,000 ppm)</span>
           </div>
-          <div className='sensor-item'>
-            <span className='sensor-name'>ICM20948</span>
-            <span className='sensor-desc'>9-DOF Motion Sensor</span>
+          <div>
+            <span>ICM20948</span>
+            <span>9-DOF Motion Sensor</span>
           </div>
         </div>
       </section>
 
-      <section className='visualizations'>
-        {/* <h2>Current Readings</h2> */}
-        <main className='grid'>
+      <section>
+        <main>
           <Visualization sensor='temperature' />
           <Visualization sensor='light' />
           <Visualization sensor='humidity' />
@@ -123,18 +107,18 @@ function TimelinePage() {
   return (
     <>
       <header>
-        <div className='header-content'>
+        <div>
           <h1>
             <img src='/favicon.png' alt='icon' />
             office---space
           </h1>
-          <Link to='/' className='nav-button'>
-            ← Home
-          </Link>
+          <nav>
+            <Link to='/'>← Home</Link>
+          </nav>
         </div>
       </header>
 
-      <section className='timeline'>
+      <section>
         <VerticalTimeline />
       </section>
 

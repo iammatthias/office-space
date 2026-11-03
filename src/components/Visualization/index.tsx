@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import styles from "./Visualization.module.css";
 
 type TimePeriod = "daily" | "cumulative";
 
@@ -8,7 +7,7 @@ interface VisualizationProps {
 }
 
 interface ImageData {
-  cid: string | null;
+  src: string | null;
   isLoading: boolean;
   error: Error | null;
   isPreloaded: boolean;
@@ -24,9 +23,9 @@ interface PreloadState {
 export default function Visualization_v2({ sensor }: VisualizationProps) {
   const [currentTimePeriod, setCurrentTimePeriod] = useState<TimePeriod>("cumulative");
   const [preloadState, setPreloadState] = useState<PreloadState>({
-    daily: { cid: null, isLoading: false, error: null, isPreloaded: false, imageElement: null, isImageLoaded: false },
+    daily: { src: null, isLoading: false, error: null, isPreloaded: false, imageElement: null, isImageLoaded: false },
     cumulative: {
-      cid: null,
+      src: null,
       isLoading: false,
       error: null,
       isPreloaded: false,
@@ -38,12 +37,8 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
   const preloadedImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const imageCacheRef = useRef<Map<string, string>>(new Map());
 
-  const createImageUrl = useCallback((cid: string) => {
-    return `https://cdn.iammatthias.com/ipfs/${cid}?img-width=600&img-fit=contain&img-format=webp&img-quality=85&img-dpr=2&img-onerror=redirect`;
-  }, []);
-
   const preloadImage = useCallback(
-    (cid: string, period: TimePeriod) => {
+    (src: string, period: TimePeriod) => {
       return new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new Image();
         img.crossOrigin = "anonymous";
@@ -51,8 +46,8 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
         img.decoding = "async"; // Optimize decoding
 
         img.onload = () => {
-          preloadedImagesRef.current.set(`${period}-${cid}`, img);
-          imageCacheRef.current.set(`${period}-${cid}`, img.src);
+          preloadedImagesRef.current.set(`${period}-${src}`, img);
+          imageCacheRef.current.set(`${period}-${src}`, img.src);
           setPreloadState((prev) => ({
             ...prev,
             [period]: {
@@ -68,10 +63,10 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
           reject(new Error(`Failed to load image for ${period}`));
         };
 
-        img.src = createImageUrl(cid);
+        img.src = src;
       });
     },
-    [createImageUrl]
+    []
   );
 
   const fetchImageData = useCallback(
@@ -99,25 +94,17 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
         const data = await response.json();
         const sensorData = data[`${sensor}:${period}:latest`];
 
-        if (!sensorData?.ipfs_url) {
-          throw new Error("IPFS URL not found in response");
+        const src: string | undefined = sensorData?.url;
+        if (!src) {
+          throw new Error("Image URL not found in response");
         }
 
-        // Extract CID from ipfs:// URL
-        const ipfsUrl = sensorData.ipfs_url;
-        const extractedCID = ipfsUrl.replace("ipfs://", "");
-
-        if (!extractedCID) {
-          throw new Error("Invalid IPFS URL format");
-        }
-
-        // Check if we already have this image cached
-        const cacheKey = `${period}-${extractedCID}`;
+        const cacheKey = `${period}-${src}`;
         if (imageCacheRef.current.has(cacheKey)) {
           setPreloadState((prev) => ({
             ...prev,
             [period]: {
-              cid: extractedCID,
+              src,
               isLoading: false,
               error: null,
               isPreloaded: true,
@@ -129,12 +116,12 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
         }
 
         // Start preloading the image immediately
-        const imagePromise = preloadImage(extractedCID, period);
+        const imagePromise = preloadImage(src, period);
 
         setPreloadState((prev) => ({
           ...prev,
           [period]: {
-            cid: extractedCID,
+            src,
             isLoading: false,
             error: null,
             isPreloaded: true,
@@ -189,7 +176,7 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
   }, []);
 
   const currentData = preloadState[currentTimePeriod];
-  const hasAnyData = Object.values(preloadState).some((data) => data.cid && !data.error);
+  const hasAnyData = Object.values(preloadState).some((data) => data.src && !data.error);
 
   // Show error if no data is available at all
   if (!hasAnyData && !Object.values(preloadState).some((data) => data.isLoading)) {
@@ -197,30 +184,22 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
       .filter((data) => data.error)
       .map((data) => data.error?.message)
       .join(", ");
-    return <div className={styles.error}>Error loading data: {allErrors}</div>;
+    return <div>Error loading data: {allErrors}</div>;
   }
 
   // Show loading for current period if it's still loading
   if (currentData.isLoading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>Loading {currentTimePeriod} data...</div>
-        <div className={styles.toggleContainer}>
+      <figure>
+        <div>Loading {currentTimePeriod} data...</div>
+        <nav>
           {(["daily", "cumulative"] as TimePeriod[]).map((period) => {
             const periodData = preloadState[period];
-            const buttonClasses = [
-              styles.toggleButton,
-              currentTimePeriod === period ? styles.active : "",
-              periodData.isLoading ? styles.loading : "",
-              periodData.error ? styles.error : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
 
             return (
               <button
                 key={period}
-                className={buttonClasses}
+                aria-pressed={currentTimePeriod === period}
                 onClick={() => handleTimePeriodChange(period)}
                 disabled={periodData.isLoading}
               >
@@ -228,34 +207,26 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
               </button>
             );
           })}
-        </div>
-      </div>
+        </nav>
+      </figure>
     );
   }
 
   // Show error for current period if it failed
   if (currentData.error) {
     return (
-      <div className={styles.container}>
-        <div className={styles.error}>
+      <figure>
+        <div>
           Error loading {currentTimePeriod} data: {currentData.error.message}
         </div>
-        <div className={styles.toggleContainer}>
+        <nav>
           {(["daily", "cumulative"] as TimePeriod[]).map((period) => {
             const periodData = preloadState[period];
-            const buttonClasses = [
-              styles.toggleButton,
-              currentTimePeriod === period ? styles.active : "",
-              periodData.isLoading ? styles.loading : "",
-              periodData.error ? styles.error : "",
-            ]
-              .filter(Boolean)
-              .join(" ");
 
             return (
               <button
                 key={period}
-                className={buttonClasses}
+                aria-pressed={currentTimePeriod === period}
                 onClick={() => handleTimePeriodChange(period)}
                 disabled={!!periodData.error}
               >
@@ -263,29 +234,27 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
               </button>
             );
           })}
-        </div>
-      </div>
+        </nav>
+      </figure>
     );
   }
 
-  // Don't render image if CID is not available yet
-  if (!currentData.cid) {
+  if (!currentData.src) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>Loading {currentTimePeriod} data...</div>
-      </div>
+      <figure>
+        <div>Loading {currentTimePeriod} data...</div>
+      </figure>
     );
   }
 
   // Use preloaded image if available, otherwise fall back to direct URL
-  const imageUrl = currentData.imageElement?.src || createImageUrl(currentData.cid);
+  const imageUrl = currentData.imageElement?.src || currentData.src;
 
   return (
-    <div className={styles.container}>
+    <figure>
       <img
         src={imageUrl}
         alt={`${sensor} ${currentTimePeriod} visualization`}
-        className={styles.image}
         loading={currentData.isImageLoaded ? "eager" : "lazy"}
         decoding='async'
         style={{
@@ -304,23 +273,15 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
           }
         }}
       />
-      <div className={styles.toggleContainer}>
+      <nav>
         {(["daily", "cumulative"] as TimePeriod[]).map((period) => {
           const periodData = preloadState[period];
           const isDisabled = periodData.isLoading || !!periodData.error;
-          const buttonClasses = [
-            styles.toggleButton,
-            currentTimePeriod === period ? styles.active : "",
-            periodData.isLoading ? styles.loading : "",
-            periodData.error ? styles.error : "",
-          ]
-            .filter(Boolean)
-            .join(" ");
 
           return (
             <button
               key={period}
-              className={buttonClasses}
+              aria-pressed={currentTimePeriod === period}
               onClick={() => handleTimePeriodChange(period)}
               disabled={isDisabled}
               title={isDisabled ? `${period} data unavailable` : `Switch to ${period} view`}
@@ -331,7 +292,7 @@ export default function Visualization_v2({ sensor }: VisualizationProps) {
             </button>
           );
         })}
-      </div>
-    </div>
+      </nav>
+    </figure>
   );
 }
